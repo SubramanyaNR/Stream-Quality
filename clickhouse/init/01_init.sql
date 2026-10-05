@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS sq.check_results
 (
     topic         LowCardinality(String),
     field         LowCardinality(String)  DEFAULT '',          -- '' = topic-level check
-    check_type    LowCardinality(String),                       -- volume|null_rate|cardinality|freshness|distribution|structural|heartbeat
+    check_type    LowCardinality(String),                       -- volume|null_rate|cardinality|freshness|structural|heartbeat
     window_start  DateTime64(3, 'UTC'),
     window_end    DateTime64(3, 'UTC'),
     value         Float64,

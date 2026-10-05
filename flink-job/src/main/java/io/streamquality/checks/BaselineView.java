@@ -2,7 +2,7 @@ package io.streamquality.checks;
 
 import java.util.Optional;
 
-/** Read-only view over keyed RocksDB state holding per-(topic,field) window summaries for 24h. */
+/** Read-only view over keyed state holding recent per-(topic,field) window summaries. */
 public interface BaselineView {
     Optional<Summary> forField(String field);
 

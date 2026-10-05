@@ -82,7 +82,7 @@
             <version>${jackson.version}</version>
         </dependency>
 
-        <!-- ===== Sketches: HLL (cardinality, Phase 4) + KLL quantiles (freshness, distribution) =====
+        <!-- ===== Sketches: HLL (cardinality, Phase 4) + KLL quantiles (freshness percentiles) =====
              6.2.x is the last line that runs on Java 11/17 without extra JVM flags. -->
         <dependency>
             <groupId>org.apache.datasketches</groupId>

@@ -9,7 +9,7 @@ public interface WindowContext {
     long windowEndMs();
     default long windowSizeMs() { return windowEndMs() - windowStartMs(); }
     CheckThresholds thresholds();
-    /** Rolling 24h baseline for drift checks; EMPTY until min_baseline_windows reached. */
+    /** Short lookback (last N windows) for cardinality drift; EMPTY until N windows seen. */
     BaselineView baseline();
     /** Wall clock, injectable for tests. */
     long nowMs();

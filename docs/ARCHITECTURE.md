@@ -12,8 +12,8 @@
 ┌───────────────────────────┐  output     │  3 Window  keyBy(topic), tumbling event-time │
 │ Apicurio Registry (v3 API)│◀────────────│            CompositeCheckWindowFn runs all   │
 └───────────────────────────┘ schema fetch│            QualityChecks in ONE pass         │
-   (circuit-breaker; optional)            │  4 Baseline keyBy(topic|field) MapState 24h  │
-                                          │            -> feeds DistributionShiftCheck   │
+   (circuit-breaker; optional)            │  4 Cardinality lookback ring (keyed state)   │
+                                          │                                              │
                                           └───────┬──────────────────────┬───────────────┘
                                    CheckResult rows│            metrics :9249 (sq_check_status)
                                                   ▼                      ▼
@@ -27,7 +27,7 @@
 Flows:
 1. **Data path**: Kafka -> parse -> (bad records -> DLQ topic) -> window checks -> ClickHouse.
 2. **Alert path**: Flink publishes `sq_check_status{topic,field,check_type}` gauges -> Prometheus rules -> Alertmanager -> webhook. ClickHouse is the audit trail, Prometheus is the alert trigger (it already does `for:` durations, grouping, silences).
-3. **Baseline path**: per-window per-field summaries -> keyed `MapState<windowStart, Summary>` in RocksDB, evicted past 24h by timers; drift check at window N reads the baseline built from windows < N (never includes itself).
+3. **Cardinality baseline**: last N (default 30) per-window HLL estimates per field in keyed state; drift at window N compares to the mean of windows < N (never includes itself). No 24h baseline, no distribution check (Phase 5 descoped).
 4. **Degradation**: registry circuit breaker open => structural check emits nothing (and a `structural` row with status `ok`+details `{"skipped":"registry_unreachable"}` is NOT written; a gauge `sq_registry_up=0` is). All statistical checks unaffected.
 
 ## 2. Key decisions (made)
@@ -39,9 +39,8 @@ Flows:
 | 3 | Window | **60 s tumbling, event-time**, 10 s bounded out-of-orderness, 30 s allowed lateness, 30 s idle timeout | Per-second volume = count/60. Idle timeout is mandatory or one quiet partition freezes every window. Late data after lateness is counted (`late_records`) not silently lost. |
 | 4 | One operator, many checks | `keyBy(topic)` + single `AggregateFunction` composing all `QualityCheck`s | One state read per record; fields fan out inside the accumulator rather than keying by field (avoids N× shuffle). Skew risk on a hot topic: set topic parallelism = partitions and pre-aggregate by `topic,partition` then merge. |
 | 5 | Freshness basis | `processingTime - eventTime` on KLL sketch, report p50/p95/max | Only 3 numbers per window; KLL merges. Event time from payload field in `thresholds.yaml`, fallback Kafka timestamp (flagged in details). |
-| 6 | Cardinality | datasketches `HllSketch(lgK=12)` per field per window; drift = ratio to baseline mean distinct | ~1.6% error, 4 KB. Do NOT use HLL union across 24h for the baseline; store per-window estimates. |
-| 7 | Distribution | Welford (count, mean, M2) + KLL(k=200) per field per window; baseline = merged stats of last 24h windows; flag z = \|mean - baseline mean\| / baseline stddev-of-window-means, plus p95 shift ratio | Cheap, explainable, mergeable. KS test is out of scope. |
-| 8 | Baseline storage | RocksDB incremental checkpoints, `MapState<Long,Summary>`, event-time timer eviction at 24h; **min_baseline_windows=60** before drift can fire (cold-start = status ok, details `warming_up`) | Per requirement; 1440 summaries per field x ~1 KB is tiny. |
+| 6 | Cardinality | datasketches `HllSketch(lgK=12)` per field per window; drift = ratio to mean of last N windows' estimates | ~1.6% error, 4 KB. Store per-window estimates, not merged sketches. |
+| 7 | Distribution shift + 24h RocksDB baseline | **Descoped (Phase 5 skipped)** | Highest cost/risk, lowest necessity. RocksDB stays as the state backend (cheap, scales state) but is no longer a requirement driver. Revisit later; `QualityCheck` and `BaselineView` are already shaped for it. |
 | 9 | Delivery | **At-least-once + idempotent ClickHouse** (ReplacingMergeTree on window key). Not exactly-once. | ClickHouse has no 2PC; replays collapse. Dashboards must not double count: use `argMax`/`FINAL`-free latest views provided in init.sql. |
 | 10 | ClickHouse writes | Custom batching sink over HTTP `JSONEachRow` | No JDBC driver dependency; flush on 5k rows/2 s/checkpoint. |
 | 11 | Alerting | Flink metrics -> Prometheus rules -> Alertmanager webhook | Reuses `for:`, grouping, silences, inhibition. Gauge label cardinality bounded by thresholds.yaml (only configured fields). |
@@ -59,7 +58,7 @@ Flows:
 5. **DLQ amplification**: a systemic bug could DLQ 100% of traffic. Cap with a rate limiter + count in metrics; envelope keeps original key/headers/bytes + reason, not re-parsed JSON.
 6. **Gauge cardinality in Prometheus**: only whitelisted topic/field combos; never label with values.
 7. **Schema evolution / registry flaps**: cache last-good schema, TTL refresh, breaker; structural check reports `skipped`, never `fail`, when registry is down.
-8. **Checkpoint/state growth**: RocksDB TTL + timers; verify with a 24h soak before Phase 5 sign-off.
+8. **State growth**: lookback ring is tiny; still set state TTL and verify with a few hours' soak.
 9. **Threshold reload**: v1 = restart from savepoint; document it. Broadcast-state hot reload is a stretch.
 10. **ClickHouse schema untested here**: `init.sql` was written without a running ClickHouse; first `make up` must be validated (esp. `CHECK` constraint + `ALTER ... ADD INDEX` on 26.x) - Phase 1 exit criterion.
 11. **30-minute setup claim**: first image build downloads Maven deps (~3-5 min). Publish prebuilt image to GHCR before Phase 6; provide a "no Kafka handy" doc pointing to a throwaway single-node KRaft container for demo only (not part of the stack).

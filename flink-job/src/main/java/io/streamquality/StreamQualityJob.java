@@ -15,8 +15,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *        │
  *        └─> keyBy(topic) ─> window(Tumbling event-time) ─> CompositeCheckWindowFn(List<QualityCheck>)
  *                              ├─ CheckResult ──> ClickHouseSink (sq.check_results)
- *                              └─ per-field window summary ─> keyBy(topic|field) ─> BaselineFn (RocksDB MapState, 24h TTL)
- *                                                               └─> feeds DistributionShiftCheck next window
+ *                              └─ cardinality only: small per-(topic,field) ring of recent estimates in keyed state
  *   Heartbeat source (1/min) ──────────────────────────────────> ClickHouseSink (sq.job_heartbeat)
  */
 public final class StreamQualityJob {
@@ -36,7 +35,7 @@ public final class StreamQualityJob {
         // Phase 2: KafkaSource -> ParseFn(+DLQ) -> VolumeCheck, NullRateCheck
         // Phase 3: + SchemaRegistryClient (circuit breaker) -> StructuralCheck
         // Phase 4: + CardinalityCheck (HLL), FreshnessCheck (KLL), watermarks
-        // Phase 5: + DistributionShiftCheck + BaselineFn
+        // Phase 5 (distribution shift, 24h baseline): intentionally skipped
 
         env.execute("stream-quality-monitor");
     }

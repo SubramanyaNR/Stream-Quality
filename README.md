@@ -2,7 +2,7 @@
 
 In-stream, operational data-quality monitoring: a Flink job attaches to an **existing** Apache Kafka (KRaft) cluster, runs windowed statistical checks, writes one row per check per window to ClickHouse, and alerts through Alertmanager. Grafana shows topic health, field drill-down and a violation log.
 
-Checks: volume, null rate, cardinality drift (HLL), freshness, distribution shift (24 h RocksDB baseline), structural (Apicurio JSON Schema, optional).
+Checks: volume, null rate, cardinality drift (HLL), freshness, structural (Apicurio JSON Schema, optional).
 
 > Status: Phase 0 - architecture, compose stack, ClickHouse schema and Flink skeleton. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
