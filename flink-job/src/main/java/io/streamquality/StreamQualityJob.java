@@ -3,6 +3,7 @@ package io.streamquality;
 import io.streamquality.checks.CardinalityCheck;
 import io.streamquality.checks.FreshnessCheck;
 import io.streamquality.checks.NullRateCheck;
+import io.streamquality.checks.StructuralCheck;
 import io.streamquality.checks.QualityCheck;
 import io.streamquality.checks.VolumeCheck;
 import io.streamquality.config.ConfigLoader;
@@ -14,6 +15,7 @@ import io.streamquality.model.RawRecord;
 import io.streamquality.operators.CompositeCheck;
 import io.streamquality.operators.LateCounterFn;
 import io.streamquality.operators.ParseFn;
+import io.streamquality.registry.RegistryConfig;
 import io.streamquality.source.KafkaPreflight;
 import io.streamquality.source.RawRecordDeserializer;
 import io.streamquality.source.TickFn;
@@ -87,7 +89,7 @@ public final class StreamQualityJob {
                 arg(params, "clickhouse.user", "CLICKHOUSE_USER", "sq_writer"),
                 arg(params, "clickhouse.password", "CLICKHOUSE_PASSWORD", "sq_writer_pw"));
 
-        String registryStatus = "true".equalsIgnoreCase(registry.getProperty("sq.registry.enabled", "false")) ? "unknown" : "disabled";
+        RegistryConfig registryCfg = RegistryConfig.from(registry);
         String jobId = params.get("job-id", "sq-" + java.util.UUID.randomUUID().toString().substring(0, 8));
 
         // ---- topics + preflight (fail at submit time with a clear message) ----
@@ -110,7 +112,7 @@ public final class StreamQualityJob {
                 RateLimiterStrategy.perSecond(1.0 / hbSec), Types.LONG);
         DataStream<ChRow> heartbeat = env.fromSource(hbTicks, WatermarkStrategy.noWatermarks(), "heartbeat-ticks")
                 .setParallelism(1)
-                .map(new HeartbeatFn(kafkaClient, jobId, VERSION, registryStatus)).name("heartbeat").setParallelism(1);
+                .map(new HeartbeatFn(kafkaClient, jobId, VERSION, registryCfg)).name("heartbeat").setParallelism(1);
 
         // ---- Kafka source -> parse (+ DLQ side output) ----
         OffsetsInitializer start = "earliest".equalsIgnoreCase(kafkaAll.getProperty("auto.offset.reset", "latest"))
@@ -123,7 +125,7 @@ public final class StreamQualityJob {
                 .build();
         SingleOutputStreamOperator<ParsedRecord> parsed = env
                 .fromSource(source, WatermarkStrategy.noWatermarks(), "kafka-source")
-                .process(new ParseFn(th)).name("parse");
+                .process(new ParseFn(th, registryCfg)).name("parse");
 
         KafkaSink<DlqRecord> dlqSink = KafkaSink.<DlqRecord>builder()
                 .setKafkaProducerConfig(kafkaClient)
@@ -140,7 +142,7 @@ public final class StreamQualityJob {
                 .setParallelism(1).flatMap(new TickFn(monitored)).name("ticks").setParallelism(1);
 
         // ---- windowed checks ----
-        List<QualityCheck<?>> checks = List.of(new VolumeCheck(), new NullRateCheck(), new CardinalityCheck(th), new FreshnessCheck());
+        List<QualityCheck<?>> checks = List.of(new VolumeCheck(), new NullRateCheck(), new CardinalityCheck(th), new FreshnessCheck(), new StructuralCheck());
         OutputTag<ParsedRecord> late = new OutputTag<>("late") {};
         SingleOutputStreamOperator<ChRow> results = parsed.union(ticks)
                 .assignTimestampsAndWatermarks(WatermarkStrategy
@@ -156,7 +158,6 @@ public final class StreamQualityJob {
 
         heartbeat.union(results).sinkTo(new ClickHouseSink(ch)).name("clickhouse").setParallelism(1);
 
-        // Phase 3: + SchemaRegistryClient (circuit breaker) -> StructuralCheck
                 // Phase 5 (distribution shift, 24h baseline): intentionally skipped
     }
 

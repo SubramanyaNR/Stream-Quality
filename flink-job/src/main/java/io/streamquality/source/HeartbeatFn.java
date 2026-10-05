@@ -3,6 +3,9 @@ package io.streamquality.source;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.streamquality.sink.ChRow;
+import io.streamquality.registry.ApicurioV3Client;
+import io.streamquality.registry.RegistryClient;
+import io.streamquality.registry.RegistryConfig;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -23,15 +26,16 @@ public final class HeartbeatFn extends RichMapFunction<Long, ChRow> {
     private final Properties kafkaClientProps;
     private final String jobId;
     private final String version;
-    private final String registryStatus;
+    private final RegistryConfig registryCfg;
+    private transient RegistryClient registry;
     private transient AdminClient admin;
     private transient ObjectMapper mapper;
 
-    public HeartbeatFn(Properties kafkaClientProps, String jobId, String version, String registryStatus) {
+    public HeartbeatFn(Properties kafkaClientProps, String jobId, String version, RegistryConfig registryCfg) {
         this.kafkaClientProps = kafkaClientProps;
         this.jobId = jobId;
         this.version = version;
-        this.registryStatus = registryStatus;
+        this.registryCfg = registryCfg;
     }
 
     @Override
@@ -45,6 +49,7 @@ public final class HeartbeatFn extends RichMapFunction<Long, ChRow> {
         p.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "5000");
         p.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "8000");
         admin = AdminClient.create(p);
+        if (registryCfg != null && registryCfg.enabled()) registry = new ApicurioV3Client(registryCfg);
     }
 
     @Override
@@ -66,7 +71,7 @@ public final class HeartbeatFn extends RichMapFunction<Long, ChRow> {
         n.put("kafka_bootstrap", kafkaClientProps.getProperty("bootstrap.servers", ""));
         n.put("kafka_status", status);
         n.put("kafka_cluster_id", clusterId);
-        n.put("registry_status", registryStatus);
+        n.put("registry_status", registry == null ? "disabled" : registry.ping() ? "up" : "down");
         return new ChRow("job_heartbeat", n.toString());
     }
 

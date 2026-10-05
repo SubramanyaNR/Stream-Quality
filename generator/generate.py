@@ -12,6 +12,7 @@ Scenario YAML (see generator/scenarios/*.yaml):
       rate: 20                     # messages/second
       null_rates: {customer_id: 0} # probability a field is emitted as null
       bad_json_rate: 0             # probability of emitting a corrupt payload
+      type_break: {amount: 0.2}    # probability a field is emitted with the wrong type ('N/A')
       fields: {order_id: id, customer_id: {choice: 50}, amount: {float: [1, 500]}}
       phases:                      # optional; each overrides the keys above for `duration` seconds
         - {duration: 60}
@@ -86,6 +87,9 @@ def make_event(cfg, rng, now_ms):
     for f, p in (cfg.get("null_rates") or {}).items():
         if f in ev and rng.random() < p:
             ev[f] = None
+    for f, p in (cfg.get("type_break") or {}).items():       # wrong-typed value: schema violation, still valid JSON
+        if f in ev and rng.random() < p:
+            ev[f] = "N/A"
     lag = cfg.get("event_lag_ms", 0)
     ev["ts"] = now_ms - lag
     return ev

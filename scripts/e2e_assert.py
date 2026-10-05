@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 
 ch_url, auth, bootstrap, dlq, since = sys.argv[1:6]
+REGISTRY = len(sys.argv) > 6 and sys.argv[6] == "true"
 user, pw = auth.split(":", 1)
 fails = []
 
@@ -60,6 +61,17 @@ check("freshness orders: 150 s-old events -> FAIL (measured, not dropped as late
 p_fr = rows("topic='payments' AND check_type='freshness'")
 check("freshness payments: always ok", p_fr and all(r["status"] == "ok" for r in p_fr), [(r["status"], round(r["value"])) for r in p_fr])
 
+if REGISTRY:
+    o_st = rows("topic='orders' AND check_type='structural'")
+    check("structural orders: valid traffic ok", any(r["status"] == "ok" and r["value"] == 0 for r in o_st), [(r["status"], round(r["value"], 3)) for r in o_st])
+    check("structural orders: 30% wrong-typed amount -> FAIL naming the field",
+          any(r["status"] == "fail" and "amount" in r["details"] and r["value"] > 0.15 for r in o_st), [(r["status"], round(r["value"], 3)) for r in o_st])
+    p_st = rows("topic='payments' AND check_type='structural'")
+    check("structural payments: always ok (schema-valid traffic)", p_st and all(r["status"] == "ok" for r in p_st), [(r["status"], round(r["value"], 3)) for r in p_st])
+    check("heartbeat reports registry up", int(q("SELECT countIf(registry_status='up') c FROM sq.job_heartbeat")[0]["c"]) >= 1)
+else:
+    print("SKIP structural assertions (registry disabled)")
+
 dups = q("SELECT count() c, uniqExact(topic, field, check_type, window_start, window_end) u FROM sq.check_results FINAL")[0]
 check("one row per (topic, field, check, window)", int(dups["c"]) == int(dups["u"]), dups)
 v = q("SELECT count() c FROM sq.violations FINAL")[0]
@@ -80,6 +92,8 @@ for m in c:
 check("DLQ: corrupt JSON dead-lettered", reasons.get("invalid_json", 0) > 5, reasons)
 check("DLQ: original bytes preserved (base64 roundtrip)", good_roundtrip)
 check("DLQ: null required field dead-lettered", reasons.get("required_field_missing", 0) > 0, reasons)
+if REGISTRY:
+    check("DLQ: schema violations dead-lettered", reasons.get("schema_violation", 0) > 5, reasons)
 
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

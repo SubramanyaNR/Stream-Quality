@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "orders value",
+  "type": "object",
+  "required": ["order_id", "amount", "ts"],
+  "properties": {
+    "order_id":    { "type": "string", "minLength": 1 },
+    "customer_id": { "type": ["string", "null"] },
+    "amount":      { "type": "number", "minimum": 0 },
+    "ts":          { "type": "integer" }
+  }
+}

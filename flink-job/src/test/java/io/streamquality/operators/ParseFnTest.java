@@ -23,7 +23,7 @@ class ParseFnTest {
                 event_time_field: ts
                 topics: { t: { fields: { id: { required: true }, user.name: {} } } }
                 """);
-        h = ProcessFunctionTestHarnesses.forProcessFunction(new ParseFn(th));
+        h = ProcessFunctionTestHarnesses.forProcessFunction(new ParseFn(th, null));
         h.open();
     }
 

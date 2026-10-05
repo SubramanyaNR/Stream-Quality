@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "payments value",
+  "type": "object",
+  "required": ["payment_id", "amount", "ts"],
+  "properties": {
+    "payment_id": { "type": "string", "minLength": 1 },
+    "amount":     { "type": "number", "minimum": 0 },
+    "ts":         { "type": "integer" }
+  }
+}

@@ -3,6 +3,7 @@
 # mini-cluster + the real generator. Prereqs (already running):
 #   Kafka   at $E2E_BOOTSTRAP     (default 127.0.0.1:19092), topics auto-created here
 #   ClickHouse at $E2E_CH_URL     (default http://127.0.0.1:8123) with clickhouse/init/01_init.sql applied
+#   Apicurio (optional) at $E2E_REGISTRY_URL (default http://127.0.0.1:18081/apis/registry/v3): enables structural checks
 # Needs: $KAFKA_HOME (for kafka-topics.sh), maven, java, python3 with kafka-python + PyYAML.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,7 +26,11 @@ done
 
 sed -e "s#^bootstrap.servers=.*#bootstrap.servers=$BOOT#" -e "s#^sq.dlq.topic=.*#sq.dlq.topic=$DLQ#" \
     -e "s#^sq.source.topics=.*#sq.source.topics=orders,payments#" config/kafka.properties > "$WORK/config/kafka.properties"
-cp config/registry.properties "$WORK/config/"
+REG=${E2E_REGISTRY_URL:-http://127.0.0.1:18081/apis/registry/v3}; REG_ON=false
+if curl -sf -m 3 "$REG/system/info" >/dev/null; then
+  REG_ON=true; python3 scripts/register_schemas.py --url "$REG" >/dev/null
+else echo "registry not reachable at $REG -> structural checks disabled for this run"; fi
+sed -e "s#^sq.registry.enabled=.*#sq.registry.enabled=$REG_ON#" -e "s#^sq.registry.url=.*#sq.registry.url=$REG#" config/registry.properties > "$WORK/config/registry.properties"
 sed -e 's/size: 60s/size: 5s/' -e 's/max_out_of_orderness: 5s/max_out_of_orderness: 2s/' \
     -e 's/min_history: 5/min_history: 3/' config/thresholds.yaml > "$WORK/config/thresholds.yaml"
 
@@ -41,4 +46,4 @@ grep -q "Assigned to partition" "$WORK/job.log" || { echo "job did not start"; t
 SINCE=$(date +%s)
 python3 generator/generate.py --config "$WORK/config/kafka.properties" --scenario generator/scenarios/e2e.yaml
 echo "waiting for last windows to close..."; sleep 14
-python3 scripts/e2e_assert.py "$CH" "$CH_ADMIN" "$BOOT" "$DLQ" "$SINCE"
+python3 scripts/e2e_assert.py "$CH" "$CH_ADMIN" "$BOOT" "$DLQ" "$SINCE" "$REG_ON"

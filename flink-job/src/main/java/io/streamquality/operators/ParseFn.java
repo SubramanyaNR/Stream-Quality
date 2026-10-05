@@ -6,11 +6,16 @@ import io.streamquality.config.Thresholds;
 import io.streamquality.dlq.DlqRecord;
 import io.streamquality.model.ParsedRecord;
 import io.streamquality.model.RawRecord;
+import io.streamquality.registry.ApicurioV3Client;
+import io.streamquality.registry.RegistryConfig;
+import io.streamquality.registry.SchemaProvider;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.flink.metrics.Gauge;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
@@ -29,12 +34,27 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
     static final long SECONDS_CUTOFF = 100_000_000_000L;
 
     private final Thresholds thresholds;
+    private final RegistryConfig registryCfg;
     private transient ObjectMapper mapper;
+    private transient SchemaProvider schemas;
+    private transient AtomicInteger registryUp;
 
-    public ParseFn(Thresholds thresholds) { this.thresholds = thresholds; }
+    public ParseFn(Thresholds thresholds, RegistryConfig registryCfg) { this.thresholds = thresholds; this.registryCfg = registryCfg; }
 
     @Override
-    public void open(OpenContext ctx) { mapper = new ObjectMapper(); }
+    public void open(OpenContext ctx) {
+        mapper = new ObjectMapper();
+        registryUp = new AtomicInteger(registryCfg != null && registryCfg.enabled() ? 1 : 0);
+        getRuntimeContext().getMetricGroup().gauge("registry_up", (Gauge<Integer>) registryUp::get);
+        if (registryCfg != null && registryCfg.enabled()) {
+            if (!"apicurio".equalsIgnoreCase(registryCfg.type()))
+                throw new IllegalStateException("Unsupported sq.registry.type '" + registryCfg.type() + "' (supported: apicurio)");
+            schemas = new SchemaProvider(registryCfg, new ApicurioV3Client(registryCfg), System::currentTimeMillis);
+        }
+    }
+
+    @Override
+    public void close() { if (schemas != null) schemas.close(); }
 
     @Override
     public void processElement(RawRecord r, Context ctx, Collector<ParsedRecord> out) {
@@ -71,7 +91,16 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
                 fields.put(f, v.isValueNode() ? v.asText() : v.toString());
             }
         }
-        out.collect(new ParsedRecord(r.topic(), r.partition(), r.offset(), eventTime, fromPayload, now, false, fields));
+        byte structural = ParsedRecord.STRUCT_SKIPPED;
+        String structuralError = null;
+        if (schemas != null) {
+            SchemaProvider.Result v = schemas.validate(r.topic(), root);
+            registryUp.set(schemas.isUp() ? 1 : 0);
+            if (v.state() == SchemaProvider.State.VALID) structural = ParsedRecord.STRUCT_VALID;
+            else if (v.state() == SchemaProvider.State.INVALID) { structural = ParsedRecord.STRUCT_INVALID; structuralError = trunc(v.error()); }
+        }
+        out.collect(new ParsedRecord(r.topic(), r.partition(), r.offset(), eventTime, fromPayload, now, false, fields, structural, structuralError));
+        if (structural == ParsedRecord.STRUCT_INVALID) dlq(ctx, r, DlqRecord.SCHEMA_VIOLATION, structuralError);
         if (missingRequired != null) dlq(ctx, r, DlqRecord.REQUIRED_FIELD_MISSING, missingRequired.toString());
     }
 
