@@ -1,0 +1,451 @@
+{
+  "uid": "sq-field-drilldown",
+  "title": "Stream Quality - Field drill-down",
+  "description": "Per-topic, per-field time series for null rate, cardinality, freshness and volume.",
+  "tags": [
+    "stream-quality"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "topic",
+        "label": "Topic",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "sq-ch"
+        },
+        "query": {
+          "rawSql": "SELECT DISTINCT topic FROM sq.latest_status ORDER BY topic",
+          "editorType": "sql",
+          "format": 1
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1
+      },
+      {
+        "name": "field",
+        "label": "Field",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "sq-ch"
+        },
+        "query": {
+          "rawSql": "SELECT DISTINCT field FROM sq.latest_status WHERE field != '' AND topic IN (${topic:singlequote}) ORDER BY field",
+          "editorType": "sql",
+          "format": 1
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Topic health",
+      "type": "link",
+      "url": "/d/sq-topic-health",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Field drill-down",
+      "type": "link",
+      "url": "/d/sq-field-drilldown",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Violation log",
+      "type": "link",
+      "url": "/d/sq-violations",
+      "icon": "bolt"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Null rate per field",
+      "type": "timeseries",
+      "description": "Fraction of records where the field is null/missing. Dashed = threshold that was crossed (shown only while violating).",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT window_start AS time, field, value AS null_rate FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'null_rate' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) ORDER BY time"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT window_start AS time, concat(field, ' threshold') AS series, threshold FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'null_rate' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) AND status != 'ok' ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "title": "Cardinality (HLL estimate) vs baseline",
+      "type": "timeseries",
+      "description": "Approximate distinct values per window (HyperLogLog, ~1.6% error) against the mean of recent windows.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT window_start AS time, field, value AS distinct_estimate FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'cardinality' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) ORDER BY time"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT window_start AS time, concat(field, ' baseline') AS series, JSONExtractFloat(details, 'baseline') AS baseline FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'cardinality' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) AND JSONHas(details, 'baseline') AND JSONType(details, 'baseline') != 'Null' ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Freshness: p50 / p95 / p99 latency",
+      "type": "timeseries",
+      "description": "Processing time minus the payload timestamp. Status is judged on p95.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT * FROM (SELECT window_start AS time, 'p50' AS series, JSONExtractFloat(details, 'p50_ms') AS ms FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p95', value FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p99', JSONExtractFloat(details, 'p99_ms') FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote})) ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "title": "Volume (messages/s) vs baseline",
+      "type": "timeseries",
+      "description": "Messages per second per window against the mean of recent windows.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT window_start AS time, topic, value AS msgs_per_s FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'volume' AND topic IN (${topic:singlequote}) ORDER BY time"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT window_start AS time, concat(topic, ' baseline') AS series, JSONExtractFloat(details, 'baseline_rate') AS baseline FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'volume' AND topic IN (${topic:singlequote}) AND JSONType(details, 'baseline_rate') != 'Null' ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "title": "Status timeline (all checks for selected topic/fields)",
+      "type": "state-timeline",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT window_start AS time, concat(check_type, if(field = '', '', concat('.', field))) AS series, toUInt8(status) AS status FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote}) AND (field = '' OR field IN (${field:singlequote})) ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "WARN",
+                  "color": "orange",
+                  "index": 1
+                },
+                "2": {
+                  "text": "FAIL",
+                  "color": "red",
+                  "index": 2
+                }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "no data",
+                  "color": "text",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "never",
+        "rowHeight": 0.8
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

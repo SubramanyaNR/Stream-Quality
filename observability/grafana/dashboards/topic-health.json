@@ -1,0 +1,657 @@
+{
+  "uid": "sq-topic-health",
+  "title": "Stream Quality - Topic health",
+  "description": "One row per topic with a RAG status per check type.",
+  "tags": [
+    "stream-quality"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "graphTooltip": 1,
+  "templating": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Topic health",
+      "type": "link",
+      "url": "/d/sq-topic-health",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Field drill-down",
+      "type": "link",
+      "url": "/d/sq-field-drilldown",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Violation log",
+      "type": "link",
+      "url": "/d/sq-violations",
+      "icon": "bolt"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Topic health (latest window per check)",
+      "type": "table",
+      "description": "Worst status across fields for each check type, from the latest window. 'no data' = no result in the last 5 minutes (check not configured for the topic, or the topic/monitor is silent). Click a topic to drill down.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT topic, if(countIf(check_type = 'volume') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'volume'))) AS volume, if(countIf(check_type = 'null_rate') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'null_rate'))) AS null_rate, if(countIf(check_type = 'cardinality') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'cardinality'))) AS cardinality, if(countIf(check_type = 'freshness') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'freshness'))) AS freshness, if(countIf(check_type = 'structural') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'structural'))) AS structural, max(window_end) AS last_window FROM (SELECT topic, check_type, toUInt8(status) AS status_n, window_end FROM sq.latest_status FINAL WHERE window_end > now64(3) - INTERVAL 5 MINUTE) GROUP BY topic ORDER BY topic"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "volume"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "WARN",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "no data",
+                        "color": "text",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "null_rate"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "WARN",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "no data",
+                        "color": "text",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cardinality"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "WARN",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "no data",
+                        "color": "text",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "freshness"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "WARN",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "no data",
+                        "color": "text",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "structural"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "WARN",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "no data",
+                        "color": "text",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "topic"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Drill down",
+                    "url": "/d/sq-field-drilldown?var-topic=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "title": "Topics failing",
+      "type": "stat",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT countDistinct(topic) AS failing FROM sq.latest_status FINAL WHERE status = 'fail' AND window_end > now64(3) - INTERVAL 5 MINUTE"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Topics warning",
+      "type": "stat",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT countDistinct(topic) AS warning FROM sq.latest_status FINAL WHERE status = 'warn' AND window_end > now64(3) - INTERVAL 5 MINUTE"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "title": "Monitor heartbeat age (s)",
+      "type": "stat",
+      "description": "Seconds since the Flink job last wrote a heartbeat.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 3,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT dateDiff('second', max(ts), now64(3)) AS age_s FROM sq.job_heartbeat"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "title": "Kafka reachable",
+      "type": "stat",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 3,
+        "w": 4,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT argMax(kafka_status, ts) AS kafka FROM sq.job_heartbeat"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "up": {
+                  "text": "UP",
+                  "color": "green"
+                },
+                "down": {
+                  "text": "DOWN",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "title": "Registry",
+      "type": "stat",
+      "description": "disabled / up / down. When down, structural checks are skipped; statistical checks continue.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 6,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT argMax(registry_status, ts) AS registry FROM sq.job_heartbeat"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "up": {
+                  "text": "UP",
+                  "color": "green"
+                },
+                "disabled": {
+                  "text": "DISABLED",
+                  "color": "text"
+                },
+                "down": {
+                  "text": "DOWN (structural skipped)",
+                  "color": "orange"
+                },
+                "unknown": {
+                  "text": "UNKNOWN",
+                  "color": "text"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "title": "Violations per minute by check type",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toStartOfInterval(window_end, INTERVAL 1 MINUTE) AS time, check_type, count() AS violations FROM sq.violations FINAL WHERE $__timeFilter(window_end) GROUP BY time, check_type ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 70
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

@@ -1,0 +1,344 @@
+{
+  "uid": "sq-violations",
+  "title": "Stream Quality - Violation log",
+  "description": "Raw audit trail of every warn/fail with filters, plus delivered alert notifications.",
+  "tags": [
+    "stream-quality"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "topic",
+        "label": "Topic",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "sq-ch"
+        },
+        "query": {
+          "rawSql": "SELECT DISTINCT topic FROM sq.violations ORDER BY topic",
+          "editorType": "sql",
+          "format": 1
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1
+      },
+      {
+        "name": "check",
+        "label": "Check",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "sq-ch"
+        },
+        "query": {
+          "rawSql": "SELECT DISTINCT check_type FROM sq.violations ORDER BY check_type",
+          "editorType": "sql",
+          "format": 1
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1
+      },
+      {
+        "name": "status",
+        "label": "Status",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "sq-ch"
+        },
+        "query": {
+          "rawSql": "SELECT DISTINCT toString(status) FROM sq.violations ORDER BY 1",
+          "editorType": "sql",
+          "format": 1
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Topic health",
+      "type": "link",
+      "url": "/d/sq-topic-health",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Field drill-down",
+      "type": "link",
+      "url": "/d/sq-field-drilldown",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Violation log",
+      "type": "link",
+      "url": "/d/sq-violations",
+      "icon": "bolt"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Violation audit log",
+      "type": "table",
+      "description": "Every warn/fail result, newest first (max 1000 rows in the selected range). `details` holds the check-specific JSON.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT window_end AS time, topic, field, check_type, toString(status) AS status, round(value, 4) AS value, round(threshold, 4) AS threshold, details FROM sq.violations FINAL WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND toString(status) IN (${status:singlequote}) ORDER BY window_end DESC LIMIT 1000"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "fail": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warn": {
+                        "text": "WARN",
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "details"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 480
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "title": "Violations over time",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT toStartOfInterval(window_end, INTERVAL 1 MINUTE) AS time, toString(status) AS status, count() AS n FROM sq.violations FINAL WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND toString(status) IN (${status:singlequote}) GROUP BY time, status ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 70
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "warn"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Top offenders",
+      "type": "table",
+      "description": "",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "sq-ch"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "sq-ch"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT topic, field, check_type, countIf(status = 'fail') AS fails, countIf(status = 'warn') AS warns FROM sq.violations FINAL WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND toString(status) IN (${status:singlequote}) GROUP BY topic, field, check_type ORDER BY fails DESC, warns DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "title": "Alert notifications (Alertmanager webhook, via Loki)",
+      "type": "logs",
+      "description": "",
+      "datasource": {
+        "type": "loki",
+        "uid": "sq-loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "sq-loki"
+          },
+          "expr": "{service=\"alert-sink\"} | json",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}
