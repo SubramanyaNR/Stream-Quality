@@ -1,0 +1,26 @@
+# Per-topic / per-field thresholds. Hot values; changing requires job restart in v1
+# (savepoint-safe), broadcast hot-reload is a Phase 6 stretch.
+window:
+  size: 60s              # tumbling, event-time
+  allowed_lateness: 30s
+  max_out_of_orderness: 10s
+  idle_timeout: 30s
+event_time_field: ts     # JSON path to event timestamp (epoch ms or ISO-8601)
+
+defaults:
+  volume:      { warn_drop_pct: 30, fail_drop_pct: 60, min_msgs_per_sec_fail: 0 }
+  null_rate:   { warn: 0.05, fail: 0.20 }
+  cardinality: { warn_ratio: 2.0, fail_ratio: 5.0 }
+  freshness:   { warn_p95_ms: 30000, fail_p95_ms: 120000 }
+  distribution: { warn_z: 3.0, fail_z: 5.0, min_baseline_windows: 60 }
+
+topics:
+  orders:
+    fields:
+      order_id:   { type: string,  required: true, null_rate: { warn: 0.0, fail: 0.01 } }
+      customer_id:{ type: string,  cardinality: true }
+      amount:     { type: number,  distribution: true }
+  payments:
+    fields:
+      payment_id: { type: string,  required: true }
+      amount:     { type: number,  distribution: true }

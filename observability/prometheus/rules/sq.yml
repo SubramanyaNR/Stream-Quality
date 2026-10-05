@@ -1,0 +1,19 @@
+groups:
+  - name: stream-quality
+    rules:
+      # Flink job exports gauge sq_check_status{topic,field,check_type} = 0 ok / 1 warn / 2 fail
+      - alert: DataQualityFail
+        expr: max by (topic, field, check_type) (sq_check_status) == 2
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "{{ $labels.check_type }} FAIL on {{ $labels.topic }}.{{ $labels.field }}" }
+      - alert: DataQualityWarn
+        expr: max by (topic, field, check_type) (sq_check_status) == 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.check_type }} WARN on {{ $labels.topic }}.{{ $labels.field }}" }
+      - alert: MonitorHeartbeatMissing
+        expr: time() - max(sq_last_window_end_seconds) > 300
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "Quality monitor has emitted no results for 5 minutes" }

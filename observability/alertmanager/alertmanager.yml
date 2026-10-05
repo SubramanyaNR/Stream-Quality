@@ -1,0 +1,11 @@
+route:
+  receiver: sq-webhook
+  group_by: [alertname, topic]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+receivers:
+  - name: sq-webhook
+    webhook_configs:
+      - url: http://alert-sink:5001/alert
+        send_resolved: true

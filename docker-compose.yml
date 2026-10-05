@@ -1,0 +1,151 @@
+# Kafka and Apicurio are EXTERNAL. This stack: Flink, ClickHouse, Prometheus,
+# Alertmanager, Grafana, Loki (+ Alloy log shipper, + tiny webhook receiver).
+name: stream-quality
+
+x-flink-common: &flink-common
+  build: { context: ., dockerfile: flink/Dockerfile }
+  image: stream-quality/flink:2.2.1
+  extra_hosts: ["host.docker.internal:host-gateway"]   # reach Kafka/Apicurio on the Docker host (Linux needs this)
+  env_file: [.env]
+  volumes:
+    - ./config:/opt/sq/config:ro                       # kafka.properties, registry.properties, thresholds.yaml
+    - flink-checkpoints:/opt/flink/checkpoints
+  networks: [sq]
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.3
+    container_name: sq-clickhouse
+    ports: ["8123:8123", "9000:9000"]
+    environment:
+      CLICKHOUSE_DB: sq
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:-admin}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - ch-data:/var/lib/clickhouse
+      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+    ulimits: { nofile: { soft: 262144, hard: 262144 } }
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client -q 'SELECT count() FROM system.tables WHERE database=\\'sq\\' AND name=\\'check_results\\'' | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [sq]
+
+  flink-jobmanager:
+    <<: *flink-common
+    container_name: sq-flink-jm
+    command: jobmanager
+    ports: ["8082:8081"]                               # Flink UI (8082 avoids clashing with Apicurio on 8081)
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        state.backend.type: rocksdb
+        state.backend.incremental: true
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+        state.savepoints.dir: file:///opt/flink/checkpoints/savepoints
+        execution.checkpointing.interval: 30s
+        execution.checkpointing.mode: AT_LEAST_ONCE
+        restart-strategy.type: exponential-delay
+        metrics.reporters: prom
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9249
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/overview"]
+      interval: 5s
+      retries: 30
+
+  flink-taskmanager:
+    <<: *flink-common
+    container_name: sq-flink-tm
+    command: taskmanager
+    depends_on: { flink-jobmanager: { condition: service_healthy } }
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        taskmanager.memory.process.size: 2g
+        taskmanager.memory.managed.fraction: 0.4       # RocksDB lives in managed memory
+        state.backend.type: rocksdb
+        state.backend.incremental: true
+        metrics.reporters: prom
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9249
+
+  flink-job-submit:                                    # one-shot: submits the job, then exits
+    <<: *flink-common
+    container_name: sq-flink-submit
+    depends_on:
+      flink-jobmanager: { condition: service_healthy }
+      flink-taskmanager: { condition: service_started }
+      clickhouse: { condition: service_healthy }
+    restart: "no"
+    entrypoint: ["/opt/flink/bin/submit-job.sh"]
+    environment:
+      JOB_JAR: /opt/flink/usrlib/stream-quality-job.jar
+      SQ_CONFIG_DIR: /opt/sq/config
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: sq_writer
+      CLICKHOUSE_PASSWORD: sq_writer_pw
+
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    container_name: sq-prometheus
+    ports: ["9090:9090"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d", "--web.enable-lifecycle"]
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prom-data:/prometheus
+    networks: [sq]
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    container_name: sq-alertmanager
+    ports: ["9093:9093"]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes: ["./observability/alertmanager:/etc/alertmanager:ro", "am-data:/alertmanager"]
+    networks: [sq]
+
+  alert-sink:                                          # demo webhook receiver; logs payloads -> Loki
+    build: ./tools/alert-sink
+    container_name: sq-alert-sink
+    ports: ["5001:5001"]
+    networks: [sq]
+
+  loki:
+    image: grafana/loki:3.7.8
+    container_name: sq-loki
+    command: ["-config.file=/etc/loki/loki.yml"]
+    ports: ["3100:3100"]
+    volumes: ["./observability/loki/loki.yml:/etc/loki/loki.yml:ro", "loki-data:/loki"]
+    networks: [sq]
+
+  alloy:                                               # Promtail is EOL; Alloy ships container logs -> Loki
+    image: grafana/alloy:v1.20.1
+    container_name: sq-alloy
+    command: ["run", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+    networks: [sq]
+
+  grafana:
+    image: grafana/grafana:13.0.10
+    container_name: sq-grafana
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/topic-health.json
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: { clickhouse: { condition: service_healthy } }
+    networks: [sq]
+
+networks: { sq: { name: sq } }
+volumes: { ch-data: {}, prom-data: {}, am-data: {}, loki-data: {}, grafana-data: {}, flink-checkpoints: {} }
