@@ -13,7 +13,13 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.flink.api.common.functions.AggregateFunction;
+import org.apache.flink.api.common.functions.OpenContext;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -59,8 +65,35 @@ public final class CompositeCheck {
         private final Thresholds thresholds;
         private final String jobId;
 
+        // Latest status per (topic|check|field) exposed as a gauge: 0 ok / 1 warn / 2 fail. Label cardinality is
+        // bounded by thresholds.yaml (only configured topics/fields), never by data values.
+        private transient ConcurrentHashMap<String, AtomicInteger> statusGauges;
+        private transient AtomicLong lastWindowEndSec;
+
         public Eval(List<QualityCheck<?>> checks, Thresholds thresholds, String jobId) {
             this.checks = checks; this.thresholds = thresholds; this.jobId = jobId;
+        }
+
+        @Override
+        public void open(OpenContext ctx) throws Exception {
+            super.open(ctx);
+            statusGauges = new ConcurrentHashMap<>();
+            lastWindowEndSec = new AtomicLong(0);
+            getRuntimeContext().getMetricGroup().gauge("last_window_end_seconds", (Gauge<Long>) lastWindowEndSec::get);
+        }
+
+        static String statusKey(CheckResult r) { return r.topic() + "|" + r.checkType().wire() + "|" + r.field(); }
+
+        private void publishStatus(CheckResult r) {
+            String key = statusKey(r);
+            AtomicInteger g = statusGauges.computeIfAbsent(key, k -> {
+                AtomicInteger v = new AtomicInteger();
+                MetricGroup mg = getRuntimeContext().getMetricGroup()
+                        .addGroup("topic", r.topic()).addGroup("check_type", r.checkType().wire()).addGroup("field", r.field());
+                mg.gauge("check_status", (Gauge<Integer>) v::get);
+                return v;
+            });
+            g.set(r.status().ordinal());
         }
 
         @Override
@@ -98,7 +131,11 @@ public final class CompositeCheck {
                 while (l.size() > keep) l.remove(0);
                 hist.put(key, l);
             }
-            for (CheckResult r : results) out.collect(ResultMapper.toRow(r, jobId));
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (CheckResult r : results) { seen.add(statusKey(r)); publishStatus(r); out.collect(ResultMapper.toRow(r, jobId)); }
+            // A check that emitted nothing this window (e.g. null_rate on an empty topic) must not keep a stale FAIL.
+            statusGauges.forEach((k, g) -> { if (k.startsWith(topic + "|") && !seen.contains(k)) g.set(0); });
+            lastWindowEndSec.accumulateAndGet(we / 1000, Math::max);
         }
     }
 }

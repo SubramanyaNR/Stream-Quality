@@ -62,7 +62,9 @@ public final class StreamQualityJob {
 
     public static void main(String[] args) throws Exception {
         ParameterTool params = ParameterTool.fromArgs(args);
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        // On a cluster this is ignored (the cluster's config wins); embedded runs honour FLINK_CONF_DIR.
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(
+                org.apache.flink.configuration.GlobalConfiguration.loadConfiguration());
         env.getConfig().setGlobalJobParameters(params);
         build(env, params);
         env.execute("stream-quality-monitor");

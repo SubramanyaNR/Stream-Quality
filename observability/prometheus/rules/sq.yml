@@ -1,19 +1,36 @@
+# Flink exposes one gauge per (topic, check_type, field): 0 ok / 1 warn / 2 fail (latest window).
+# Flink's Prometheus reporter puts the group KEY names into the metric name, hence the long name.
 groups:
   - name: stream-quality
     rules:
-      # Flink job exports gauge sq_check_status{topic,field,check_type} = 0 ok / 1 warn / 2 fail
+      - record: sq:check_status
+        expr: max by (topic, check_type, field) (flink_taskmanager_job_task_operator_topic_check_type_field_check_status)
+
       - alert: DataQualityFail
-        expr: max by (topic, field, check_type) (sq_check_status) == 2
+        expr: sq:check_status == 2
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.check_type }} FAIL on {{ $labels.topic }}{{ if $labels.field }}.{{ $labels.field }}{{ end }}"
+          description: "Latest window violated the fail threshold. See the Violation log dashboard for details."
+
+      - alert: DataQualityWarn
+        expr: sq:check_status == 1
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.check_type }} WARN on {{ $labels.topic }}{{ if $labels.field }}.{{ $labels.field }}{{ end }}"
+          description: "Warning threshold exceeded for at least 2 minutes."
+
+      - alert: QualityMonitorStalled
+        expr: time() - max(flink_taskmanager_job_task_operator_last_window_end_seconds) > 300
         for: 1m
         labels: { severity: critical }
-        annotations: { summary: "{{ $labels.check_type }} FAIL on {{ $labels.topic }}.{{ $labels.field }}" }
-      - alert: DataQualityWarn
-        expr: max by (topic, field, check_type) (sq_check_status) == 1
+        annotations:
+          summary: "Quality monitor has produced no windows for 5 minutes (job stalled or Kafka unreachable)"
+
+      - alert: QualityMonitorMissing
+        expr: absent(flink_taskmanager_job_task_operator_last_window_end_seconds)
         for: 5m
-        labels: { severity: warning }
-        annotations: { summary: "{{ $labels.check_type }} WARN on {{ $labels.topic }}.{{ $labels.field }}" }
-      - alert: MonitorHeartbeatMissing
-        expr: time() - max(sq_last_window_end_seconds) > 300
-        for: 2m
         labels: { severity: critical }
-        annotations: { summary: "Quality monitor has emitted no results for 5 minutes" }
+        annotations:
+          summary: "Quality monitor metrics are absent (Flink job not running?)"

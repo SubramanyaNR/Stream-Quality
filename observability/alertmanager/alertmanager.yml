@@ -4,6 +4,13 @@ route:
   group_wait: 10s
   group_interval: 1m
   repeat_interval: 4h
+
+# A FAIL on a check silences the WARN for the same check/field.
+inhibit_rules:
+  - source_matchers: [alertname="DataQualityFail"]
+    target_matchers: [alertname="DataQualityWarn"]
+    equal: [topic, check_type, field]
+
 receivers:
   - name: sq-webhook
     webhook_configs:
