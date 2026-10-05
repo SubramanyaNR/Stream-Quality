@@ -70,33 +70,21 @@ CREATE VIEW IF NOT EXISTS sq.topic_health AS
 SELECT topic, check_type,
        max(status)       AS worst_status,           -- Enum compares by value: fail > warn > ok
        max(window_end)   AS last_window_end,
-       now() - max(window_end) > INTERVAL 5 MINUTE AS is_stale
+       max(window_end) < now64(3) - INTERVAL 5 MINUTE AS is_stale
 FROM sq.latest_status FINAL
 GROUP BY topic, check_type;
 
--- ---------- 4. Hourly rollup for long-range dashboards ------------------------
-CREATE TABLE IF NOT EXISTS sq.check_results_1h
-(
-    hour DateTime('UTC'), topic LowCardinality(String), field LowCardinality(String), check_type LowCardinality(String),
-    avg_value AggregateFunction(avg, Float64), max_value AggregateFunction(max, Float64),
-    n_windows AggregateFunction(count), n_warn AggregateFunction(countIf, UInt8), n_fail AggregateFunction(countIf, UInt8)
-)
-ENGINE = AggregatingMergeTree
-PARTITION BY toYYYYMM(hour)
-ORDER BY (topic, check_type, field, hour)
-TTL hour + INTERVAL 2 YEAR;
-
-CREATE MATERIALIZED VIEW IF NOT EXISTS sq.mv_check_results_1h TO sq.check_results_1h AS
-SELECT toStartOfHour(window_start) AS hour, topic, field, check_type,
-       avgState(value) AS avg_value, maxState(value) AS max_value, countState() AS n_windows,
-       countIfState(status = 'warn') AS n_warn, countIfState(status = 'fail') AS n_fail
-FROM sq.check_results GROUP BY hour, topic, field, check_type;
+-- ---------- 4. (no rollups) ----------------------------------------------------
+-- An hourly AggregatingMergeTree rollup was tried and REMOVED: materialized views see raw insert
+-- blocks before ReplacingMergeTree dedup, so replays after a Flink restart would double count.
+-- Volume is ~1 row/field/minute; dashboards query check_results directly (use argMax or FINAL).
 
 -- ---------- 5. Job heartbeat (Phase 1) ---------------------------------------
 CREATE TABLE IF NOT EXISTS sq.job_heartbeat
 (
     job_id LowCardinality(String), ts DateTime64(3,'UTC'), version LowCardinality(String),
-    kafka_bootstrap String, registry_status LowCardinality(String)    -- up|down|disabled
+    kafka_bootstrap String, kafka_status LowCardinality(String), kafka_cluster_id String,   -- up|down
+    registry_status LowCardinality(String)                                                   -- up|down|disabled
 )
 ENGINE = MergeTree ORDER BY (job_id, ts) TTL toDateTime(ts) + INTERVAL 14 DAY;
 

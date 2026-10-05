@@ -1,24 +1,24 @@
-# Per-topic / per-field thresholds. Hot values; changing requires job restart in v1
-# (savepoint-safe), broadcast hot-reload is a Phase 6 stretch.
+# Per-topic / per-field thresholds. Changing requires a job restart in v1.
+# Precedence: topics.T.fields.F.CHECK.KEY > topics.T.CHECK.KEY > defaults.CHECK.KEY
+# Comparison is strictly "greater than": warn: 0.0 means "any null warns", not "everything warns".
 window:
-  size: 60s              # tumbling, event-time
-  allowed_lateness: 30s
-  max_out_of_orderness: 10s
-  idle_timeout: 30s
-event_time_field: ts     # JSON path to event timestamp (epoch ms or ISO-8601)
+  size: 60s                  # tumbling, event-time
+  max_out_of_orderness: 10s  # records later than this behind the watermark are dropped + counted (late_records metric)
+  idle_timeout: 30s          # an idle Kafka partition stops holding back the watermark after this
+event_time_field: ts         # JSON path to the event timestamp (epoch s/ms or ISO-8601); falls back to Kafka timestamp
+history_windows: 30          # per-(check,field) lookback for baseline-relative checks (volume drop, cardinality drift)
 
 defaults:
-  volume:      { warn_drop_pct: 30, fail_drop_pct: 60, min_msgs_per_sec_fail: 0 }
+  volume:      { warn_drop_pct: 30, fail_drop_pct: 60, min_history: 5, fail_on_zero: true }
   null_rate:   { warn: 0.05, fail: 0.20 }
-  # cardinality drift is vs. the mean of the last `lookback_windows` windows (short ring in keyed state, no 24h baseline)
-  cardinality: { warn_ratio: 2.0, fail_ratio: 5.0, lookback_windows: 30 }
+  cardinality: { warn_ratio: 2.0, fail_ratio: 5.0 }
   freshness:   { warn_p95_ms: 30000, fail_p95_ms: 120000 }
 
 topics:
   orders:
     fields:
-      order_id:   { type: string,  required: true, null_rate: { warn: 0.0, fail: 0.01 } }
-      customer_id:{ type: string,  cardinality: true }
+      order_id:    { required: true, null_rate: { warn: 0.0, fail: 0.01 } }
+      customer_id: { cardinality: true }
   payments:
     fields:
-      payment_id: { type: string,  required: true }
+      payment_id:  { required: true }

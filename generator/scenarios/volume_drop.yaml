@@ -1,0 +1,14 @@
+# orders: 20 msg/s -> 4 msg/s (-80%) -> total silence -> recovery. payments stays healthy.
+topics:
+  orders:
+    rate: 20
+    fields: {order_id: id, customer_id: {choice: 50}, amount: {float: [1, 500]}}
+    phases:
+      - {duration: 90}
+      - {duration: 30, rate: 4}
+      - {duration: 30, rate: 0}
+      - {duration: 30}
+  payments:
+    rate: 10
+    fields: {payment_id: id, amount: {float: [1, 500]}}
+    phases: [{duration: 180}]

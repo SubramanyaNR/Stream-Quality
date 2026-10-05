@@ -1,0 +1,7 @@
+# 10% corrupt JSON on orders -> must land on the dead-letter topic.
+topics:
+  orders:
+    rate: 20
+    bad_json_rate: 0.10
+    fields: {order_id: id, customer_id: {choice: 50}, amount: {float: [1, 500]}}
+    phases: [{duration: 60}]

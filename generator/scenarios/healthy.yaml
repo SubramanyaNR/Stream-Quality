@@ -1,1 +1,10 @@
-scenarios: placeholder
+# Steady, clean traffic. Baseline for the demo.
+topics:
+  orders:
+    rate: 20
+    fields: {order_id: id, customer_id: {choice: 50}, amount: {float: [1, 500]}}
+    phases: [{duration: 120}]
+  payments:
+    rate: 10
+    fields: {payment_id: id, amount: {float: [1, 500]}}
+    phases: [{duration: 120}]

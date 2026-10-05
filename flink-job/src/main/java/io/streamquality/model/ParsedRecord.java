@@ -1,19 +1,24 @@
 package io.streamquality.model;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.io.Serializable;
+import java.util.Map;
 
 /**
- * A Kafka record after parsing. Broker-agnostic: only topic/partition/offset/timestamps
- * and the decoded payload. Raw bytes are kept ONLY on the dead-letter path.
+ * A Kafka record after parsing, reduced to what the checks need. Broker-agnostic.
+ * fields: only monitored fields; an ABSENT key means missing or JSON null.
+ * synthetic: a tick injected to advance watermarks / force empty windows; never counted as data.
  */
 public record ParsedRecord(
         String topic,
         int partition,
         long offset,
-        long kafkaTimestampMs,
-        long eventTimeMs,          // from payload field (thresholds.yaml: event_time_field); falls back to kafka ts
+        long eventTimeMs,
         boolean eventTimeFromPayload,
-        long processingTimeMs,     // wall clock at parse; basis for freshness
-        JsonNode payload) implements Serializable {
+        long processingTimeMs,
+        boolean synthetic,
+        Map<String, String> fields) implements Serializable {
+
+    public static ParsedRecord tick(String topic, long nowMs) {
+        return new ParsedRecord(topic, -1, -1, nowMs, false, nowMs, true, Map.of());
+    }
 }

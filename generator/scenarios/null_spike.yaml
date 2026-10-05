@@ -1,0 +1,9 @@
+# orders: clean -> 40% null customer_id and 5% null order_id (required) -> clean
+topics:
+  orders:
+    rate: 20
+    fields: {order_id: id, customer_id: {choice: 50}, amount: {float: [1, 500]}}
+    phases:
+      - {duration: 60}
+      - {duration: 60, null_rates: {customer_id: 0.4, order_id: 0.05}}
+      - {duration: 60}

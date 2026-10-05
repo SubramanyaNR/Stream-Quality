@@ -6,21 +6,21 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * Contract every check implements. One instance = one check type; it is applied per topic
- * inside a single windowed operator so a record is touched once, not once per check.
+ * Contract every check implements. One instance = one check type; all checks run inside ONE
+ * windowed operator per topic so each record is touched once, not once per check.
  *
  * Lifecycle per (topic, window):
  *   acc = createAccumulator()
- *   acc = add(record, acc)        // for each record, hot path: O(1), no allocations if possible
- *   acc = merge(a, b)             // session/merging windows & parallel pre-aggregation
- *   results = evaluate(acc, ctx)  // once, at window close
+ *   acc = add(record, acc)        // hot path, only real (non-synthetic) records; O(1)
+ *   acc = merge(a, b)
+ *   results = evaluate(acc, ctx)  // once, when the window closes
  *
- * ACC must be Serializable and small (sketch bytes, counters) - it lives in RocksDB state.
- * Checks are stateless otherwise; long-lived baselines are accessed via ctx.baseline().
+ * ACC must be small, Serializable and Flink-friendly (public fields / no-arg ctor): it lives in state.
+ * evaluate() must be pure; baseline-relative checks read ctx.history().
  */
 public interface QualityCheck<ACC extends Serializable> extends Serializable {
 
-    /** Stable id, used in config keys and the check_type column. */
+    /** Stable id; also the key under which the accumulator is stored. */
     String name();
 
     ACC createAccumulator();
@@ -29,6 +29,5 @@ public interface QualityCheck<ACC extends Serializable> extends Serializable {
 
     ACC merge(ACC a, ACC b);
 
-    /** Emit zero or more rows (one per field for field-level checks). Must be pure and deterministic. */
     List<CheckResult> evaluate(ACC acc, WindowContext ctx);
 }
