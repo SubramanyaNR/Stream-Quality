@@ -34,6 +34,8 @@ public final class SchemaProvider implements AutoCloseable {
         static final Result SKIPPED = new Result(State.SKIPPED, null);
     }
 
+    static final long NEGATIVE_TTL_MS = 30_000;
+
     private record Entry(JsonSchema schema, long loadedAt, boolean none) {}
 
     private final RegistryConfig cfg;
@@ -59,7 +61,7 @@ public final class SchemaProvider implements AutoCloseable {
         if (e == null) {
             e = load(topic);                                              // synchronous first load
             if (e == null) return Result.SKIPPED;
-        } else if (clock.getAsLong() - e.loadedAt() >= cfg.refreshMs() && refreshing.putIfAbsent(topic, true) == null) {
+        } else if (clock.getAsLong() - e.loadedAt() >= ttl(e) && refreshing.putIfAbsent(topic, true) == null) {
             refresher.execute(() -> { try { load(topic); } finally { refreshing.remove(topic); } });
         }
         if (e.none()) return Result.SKIPPED;                              // registry has no schema for this topic
@@ -67,6 +69,9 @@ public final class SchemaProvider implements AutoCloseable {
         if (errors.isEmpty()) return Result.VALID;
         return new Result(State.INVALID, errors.iterator().next().getMessage());
     }
+
+    /** "No schema registered yet" is re-checked quickly (<= 30 s) so a newly registered schema is picked up promptly. */
+    private long ttl(Entry e) { return e.none() ? Math.min(cfg.refreshMs(), NEGATIVE_TTL_MS) : cfg.refreshMs(); }
 
     private synchronized Entry load(String topic) {
         if (!breaker.allow()) { up = false; return cache.get(topic); }

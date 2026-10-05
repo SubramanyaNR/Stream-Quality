@@ -80,6 +80,18 @@ class SchemaProviderTest {
         p.close();
     }
 
+    @Test void newlyRegisteredSchemaIsPickedUpQuicklyNotAfterTheFullRefreshInterval() throws Exception {
+        var now = new AtomicLong(0);
+        var f = new Fake(); f.none = true;
+        var p = new SchemaProvider(cfg(300_000), f, now::get);          // 5 min refresh
+        assertThat(p.validate("t", M.readTree("{\"id\":5}")).state()).isEqualTo(SchemaProvider.State.SKIPPED);
+        f.none = false;                                                  // schema gets registered
+        now.set(31_000);                                                 // just past the 30 s negative TTL
+        p.validate("t", M.readTree("{\"id\":5}")); Thread.sleep(300);   // triggers background refresh
+        assertThat(p.validate("t", M.readTree("{\"id\":5}")).state()).isEqualTo(SchemaProvider.State.INVALID);
+        p.close();
+    }
+
     @Test void honoursDeclaredSpecVersion() throws Exception {
         assertThat(SchemaProvider.specOf(M.readTree("{\"$schema\":\"http://json-schema.org/draft-04/schema#\"}")).name()).isEqualTo("V4");
         assertThat(SchemaProvider.specOf(M.readTree("{}")).name()).isEqualTo("V202012");
