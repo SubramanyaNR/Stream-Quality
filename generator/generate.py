@@ -123,6 +123,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/kafka.properties")
     ap.add_argument("--scenario", required=True)
+    ap.add_argument("--bootstrap", help="override bootstrap.servers (the config file usually points at host.docker.internal, which only resolves inside containers)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
@@ -138,7 +139,10 @@ def main():
         producer = None
     else:
         from kafka import KafkaProducer
-        producer = KafkaProducer(**producer_kwargs(load_props(a.config)), linger_ms=20, acks="all")
+        props = load_props(a.config)
+        if a.bootstrap:
+            props["bootstrap.servers"] = a.bootstrap
+        producer = KafkaProducer(**producer_kwargs(props), linger_ms=20, acks="all")
 
         def send(topic, payload):
             producer.send(topic, payload)

@@ -7,6 +7,7 @@ window:
   idle_timeout: 30s
 event_time_field: ts         # JSON path to the payload timestamp (epoch s/ms or ISO-8601): used ONLY for freshness; falls back to Kafka timestamp
 history_windows: 30          # per-(check,field) lookback for baseline-relative checks (volume drop, cardinality drift)
+rebaseline_after: 30         # only OK windows feed the baseline; a violation lasting longer than this many windows becomes the new normal
 
 defaults:
   volume:      { warn_drop_pct: 30, fail_drop_pct: 60, min_history: 5, fail_on_zero: true }

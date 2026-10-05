@@ -36,6 +36,8 @@ public final class Thresholds implements Serializable {
     public long idleTimeoutMs() { return duration(root().path("window").path("idle_timeout"), "30s"); }
     public String eventTimeField() { return root().path("event_time_field").asText("ts"); }
     public int historyWindows() { return root().path("history_windows").asInt(30); }
+    /** Consecutive violating windows after which the violation is accepted as the new baseline. */
+    public int rebaselineAfter() { return root().path("rebaseline_after").asInt(historyWindows()); }
 
     /** Monitored topics = keys under `topics:`. */
     public List<String> topics() {

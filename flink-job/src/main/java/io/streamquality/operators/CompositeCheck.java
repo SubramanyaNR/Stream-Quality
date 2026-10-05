@@ -1,6 +1,7 @@
 package io.streamquality.operators;
 
 import io.streamquality.checks.History;
+import io.streamquality.checks.HistoryPolicy;
 import io.streamquality.checks.QualityCheck;
 import io.streamquality.checks.WindowContext;
 import io.streamquality.config.Thresholds;
@@ -120,11 +121,19 @@ public final class CompositeCheck {
             };
             List<CheckResult> results = new ArrayList<>();
             for (QualityCheck c : checks) results.addAll(c.evaluate((Serializable) acc.accs.get(c.name()), wc));
-            // Update history AFTER evaluating, so a window is never its own baseline.
+            // Update history AFTER evaluating, so a window is never its own baseline. Anomalous windows are not
+            // learned from (see HistoryPolicy), unless the anomaly persists long enough to be the new normal.
+            MapState<String, Integer> streaks =
+                    ctx.globalState().getMapState(new MapStateDescriptor<>("violation-streak", Types.STRING, Types.INT));
             int keep = thresholds.historyWindows();
+            int rebaselineAfter = thresholds.rebaselineAfter();
             for (CheckResult r : results) {
                 if (r.checkType() == CheckType.STRUCTURAL) continue;
                 String key = r.checkType().wire() + "|" + r.field();
+                Integer prev = streaks.get(key);
+                int streak = HistoryPolicy.nextStreak(r.status(), prev == null ? 0 : prev);
+                streaks.put(key, streak);
+                if (!HistoryPolicy.shouldRecord(r.status(), streak, rebaselineAfter)) continue;
                 List<Double> l = hist.get(key);
                 if (l == null) l = new ArrayList<>();
                 l.add(r.value());
