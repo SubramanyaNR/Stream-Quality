@@ -1,14 +1,16 @@
-# Short scripted run used by scripts/e2e-local.sh (assumes window size 5s). 60 s total.
+# Short scripted run used by scripts/e2e-local.sh (assumes window size 5s). 80 s total.
 topics:
   orders:
     rate: 20
-    fields: {order_id: id, customer_id: {choice: 50}, amount: {float: [1, 500]}}
+    fields: {order_id: id, customer_id: {choice: 15}, amount: {float: [1, 500]}}
     phases:
-      - {duration: 20}                                                                  # healthy: builds volume baseline
+      - {duration: 20}                                                                       # healthy: builds baselines
       - {duration: 15, null_rates: {customer_id: 0.4, order_id: 0.05}, bad_json_rate: 0.1}   # nulls + corrupt payloads
-      - {duration: 10, rate: 2}                                                         # -90% volume
-      - {duration: 15, rate: 0}                                                         # silence
+      - {duration: 10, fields: {order_id: id, customer_id: {choice: 5000}, amount: {float: [1, 500]}}}   # id explosion (15 -> ~100 distinct / window)
+      - {duration: 10, event_lag_ms: 150000}                                                 # events arrive 150 s old
+      - {duration: 10, rate: 2}                                                              # -90% volume
+      - {duration: 15, rate: 0}                                                              # silence
   payments:
     rate: 10
     fields: {payment_id: id, amount: {float: [1, 500]}}
-    phases: [{duration: 60}]
+    phases: [{duration: 80}]

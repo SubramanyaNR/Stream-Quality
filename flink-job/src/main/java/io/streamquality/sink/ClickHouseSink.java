@@ -107,7 +107,8 @@ public final class ClickHouseSink implements Sink<ChRow> {
 
         @Override
         public void close() throws Exception {
-            timer.shutdownNow();
+            timer.shutdown();                                   // let an in-flight timer flush finish; never interrupt an INSERT
+            timer.awaitTermination(30, TimeUnit.SECONDS);
             synchronized (this) { flush(true); }
         }
     }

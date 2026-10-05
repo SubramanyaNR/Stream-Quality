@@ -50,6 +50,16 @@ check("volume payments: steady ~10/s", len(steady) >= 6, [round(r["value"], 1) f
 check("payments never failed once flowing (isolation between topics)",
       not any(r["status"] != "ok" and r["value"] > 5 for r in p_vol), [(r["status"], round(r["value"], 1)) for r in p_vol])
 
+o_card = rows("topic='orders' AND check_type='cardinality' AND field='customer_id'")
+check("cardinality customer_id: baseline ~15 distinct, ok", any(r["status"] == "ok" and 10 <= r["value"] <= 20 for r in o_card), [(r["status"], round(r["value"])) for r in o_card])
+check("cardinality customer_id: id explosion -> FAIL (>5x)", any(r["status"] == "fail" and r["value"] > 60 for r in o_card), [(r["status"], round(r["value"])) for r in o_card])
+check("cardinality: untracked fields produce no rows", not q(f"SELECT 1 FROM sq.check_results WHERE {S} AND check_type='cardinality' AND field != 'customer_id' LIMIT 1"))
+o_fr = rows("topic='orders' AND check_type='freshness'")
+check("freshness orders: healthy p95 < 5 s", any(r["status"] == "ok" and r["value"] < 5000 for r in o_fr), [(r["status"], round(r["value"])) for r in o_fr])
+check("freshness orders: 150 s-old events -> FAIL (measured, not dropped as late)", any(r["status"] == "fail" and 140_000 < r["value"] < 175_000 for r in o_fr), [(r["status"], round(r["value"])) for r in o_fr])
+p_fr = rows("topic='payments' AND check_type='freshness'")
+check("freshness payments: always ok", p_fr and all(r["status"] == "ok" for r in p_fr), [(r["status"], round(r["value"])) for r in p_fr])
+
 dups = q("SELECT count() c, uniqExact(topic, field, check_type, window_start, window_end) u FROM sq.check_results FINAL")[0]
 check("one row per (topic, field, check, window)", int(dups["c"]) == int(dups["u"]), dups)
 v = q("SELECT count() c FROM sq.violations FINAL")[0]

@@ -2,16 +2,17 @@
 # Precedence: topics.T.fields.F.CHECK.KEY > topics.T.CHECK.KEY > defaults.CHECK.KEY
 # Comparison is strictly "greater than": warn: 0.0 means "any null warns", not "everything warns".
 window:
-  size: 60s                  # tumbling, event-time
-  max_out_of_orderness: 10s  # records later than this behind the watermark are dropped + counted (late_records metric)
-  idle_timeout: 30s          # an idle Kafka partition stops holding back the watermark after this
-event_time_field: ts         # JSON path to the event timestamp (epoch s/ms or ISO-8601); falls back to Kafka timestamp
+  size: 60s                  # tumbling windows over INGESTION time (when Flink parsed the record)
+  max_out_of_orderness: 5s   # parallel-subtask skew tolerance; later records are dropped + counted (late_records metric)
+  idle_timeout: 30s
+event_time_field: ts         # JSON path to the payload timestamp (epoch s/ms or ISO-8601): used ONLY for freshness; falls back to Kafka timestamp
 history_windows: 30          # per-(check,field) lookback for baseline-relative checks (volume drop, cardinality drift)
 
 defaults:
   volume:      { warn_drop_pct: 30, fail_drop_pct: 60, min_history: 5, fail_on_zero: true }
   null_rate:   { warn: 0.05, fail: 0.20 }
-  cardinality: { warn_ratio: 2.0, fail_ratio: 5.0 }
+  # factor = max(est/baseline, baseline/est) vs mean of last history_windows windows; either direction
+  cardinality: { warn_ratio: 2.0, fail_ratio: 5.0, min_history: 5, min_baseline: 10 }
   freshness:   { warn_p95_ms: 30000, fail_p95_ms: 120000 }
 
 topics:

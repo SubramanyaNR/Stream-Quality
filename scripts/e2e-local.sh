@@ -26,7 +26,7 @@ done
 sed -e "s#^bootstrap.servers=.*#bootstrap.servers=$BOOT#" -e "s#^sq.dlq.topic=.*#sq.dlq.topic=$DLQ#" \
     -e "s#^sq.source.topics=.*#sq.source.topics=orders,payments#" config/kafka.properties > "$WORK/config/kafka.properties"
 cp config/registry.properties "$WORK/config/"
-sed -e 's/size: 60s/size: 5s/' -e 's/max_out_of_orderness: 10s/max_out_of_orderness: 2s/' \
+sed -e 's/size: 60s/size: 5s/' -e 's/max_out_of_orderness: 5s/max_out_of_orderness: 2s/' \
     -e 's/min_history: 5/min_history: 3/' config/thresholds.yaml > "$WORK/config/thresholds.yaml"
 
 ( cd flink-job && mvn -q -B -DskipTests compile && mvn -q -B dependency:build-classpath -Dmdep.outputFile="$WORK/cp.txt" )

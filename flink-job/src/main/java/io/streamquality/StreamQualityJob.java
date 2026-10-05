@@ -1,5 +1,7 @@
 package io.streamquality;
 
+import io.streamquality.checks.CardinalityCheck;
+import io.streamquality.checks.FreshnessCheck;
 import io.streamquality.checks.NullRateCheck;
 import io.streamquality.checks.QualityCheck;
 import io.streamquality.checks.VolumeCheck;
@@ -136,12 +138,12 @@ public final class StreamQualityJob {
                 .setParallelism(1).flatMap(new TickFn(monitored)).name("ticks").setParallelism(1);
 
         // ---- windowed checks ----
-        List<QualityCheck<?>> checks = List.of(new VolumeCheck(), new NullRateCheck());
+        List<QualityCheck<?>> checks = List.of(new VolumeCheck(), new NullRateCheck(), new CardinalityCheck(th), new FreshnessCheck());
         OutputTag<ParsedRecord> late = new OutputTag<>("late") {};
         SingleOutputStreamOperator<ChRow> results = parsed.union(ticks)
                 .assignTimestampsAndWatermarks(WatermarkStrategy
                         .<ParsedRecord>forBoundedOutOfOrderness(Duration.ofMillis(th.maxOutOfOrdernessMs()))
-                        .withTimestampAssigner((r, ts) -> r.eventTimeMs())
+                        .withTimestampAssigner((r, ts) -> r.processingTimeMs())   // INGESTION time: windows = what arrived, so stale events are still measured
                         .withIdleness(Duration.ofMillis(th.idleTimeoutMs())))
                 .keyBy(ParsedRecord::topic)
                 .window(TumblingEventTimeWindows.of(Duration.ofMillis(th.windowSizeMs())))
@@ -153,8 +155,7 @@ public final class StreamQualityJob {
         heartbeat.union(results).sinkTo(new ClickHouseSink(ch)).name("clickhouse").setParallelism(1);
 
         // Phase 3: + SchemaRegistryClient (circuit breaker) -> StructuralCheck
-        // Phase 4: + CardinalityCheck (HLL), FreshnessCheck (KLL)
-        // Phase 5 (distribution shift, 24h baseline): intentionally skipped
+                // Phase 5 (distribution shift, 24h baseline): intentionally skipped
     }
 
     private static String arg(ParameterTool p, String key, String env, String def) {
