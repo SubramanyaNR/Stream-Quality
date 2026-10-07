@@ -45,7 +45,8 @@ def query_var(name, label, sql):
 
 NAV = [{"title": "Topic health", "type": "link", "url": "/d/sq-topic-health", "icon": "dashboard"},
        {"title": "Field drill-down", "type": "link", "url": "/d/sq-field-drilldown", "icon": "dashboard"},
-       {"title": "Violation log", "type": "link", "url": "/d/sq-violations", "icon": "bolt"}]
+       {"title": "Violation log", "type": "link", "url": "/d/sq-violations", "icon": "bolt"},
+       {"title": "Quality analytics", "type": "link", "url": "/d/sq-analytics", "icon": "apps"}]
 
 # ----------------------------------------------------------------------------- 1. topic health
 checks = ["volume", "null_rate", "cardinality", "freshness", "structural"]
@@ -175,7 +176,93 @@ p3 = [
 d3 = dashboard("sq-violations", "Stream Quality - Violation log", p3, vars3, NAV,
                "Raw audit trail of every warn/fail with filters, plus delivered alert notifications.")
 
+
+# ----------------------------------------------------------------------------- 4. quality analytics
+# Everything here is SQL over sq.check_results / sq.incidents(); scripts/test_analytics.py runs these exact
+# strings against a seeded history and asserts the numbers.
+vars4 = [query_var("topic", "Topic", "SELECT DISTINCT topic FROM sq.latest_status ORDER BY 1")]
+F = f"$__timeFilter(window_start) AND {TOPIC_F}"
+SCORE = "CASE status WHEN 'ok' THEN 1.0 WHEN 'warn' THEN 0.5 ELSE 0.0 END"
+INC = f"sq.incidents($__timeFrom(), $__timeTo()) WHERE {TOPIC_F}"
+score_thr = {"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "orange", "value": 95}, {"color": "green", "value": 99}]}
+pct_ok_override = {"matcher": {"id": "byName", "options": "pct_ok"}, "properties": [
+    {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "basic"}}, {"id": "unit", "value": "percent"},
+    {"id": "thresholds", "value": score_thr}]}
+
+p4 = [
+    panel(1, "Data-quality score", "stat", 0, 0, 4, 4, [target(
+        f"SELECT round((100 * avg({SCORE}))::numeric, 2) AS score FROM sq.check_results WHERE {F}")],
+          "Share of check results that were healthy: ok = 1, warn = 0.5, fail = 0, averaged over every check and window in range.",
+          defaults={"unit": "percent", "decimals": 2, "thresholds": score_thr}),
+    panel(2, "Availability (windows OK)", "stat", 4, 0, 4, 4, [target(
+        f"SELECT round(100.0 * count(*) FILTER (WHERE status = 'ok') / NULLIF(count(*), 0), 2) AS pct_ok FROM sq.check_results WHERE {F}")],
+          "Share of check results with status ok, like an SLA for data health.",
+          defaults={"unit": "percent", "decimals": 2, "thresholds": score_thr}),
+    panel(3, "Open now", "stat", 8, 0, 4, 4, [target(
+        f"SELECT count(*) AS open_now FROM sq.latest_status WHERE status <> 'ok' AND window_end > now() - interval '5 minutes' AND {TOPIC_F}")],
+          "Checks whose latest window is warn/fail.",
+          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 3}]}}),
+    panel(4, "Incident count", "stat", 12, 0, 4, 4, [target(f"SELECT count(*) AS incidents FROM {INC}")],
+          "Runs of consecutive warn/fail windows for one check, in the selected range.",
+          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}]}}),
+    panel(5, "Longest incident", "stat", 16, 0, 4, 4, [target(f"SELECT extract(epoch FROM max(duration))::int AS seconds FROM {INC}")],
+          defaults={"unit": "s"}),
+    panel(6, "Avg incident duration", "stat", 20, 0, 4, 4, [target(f"SELECT extract(epoch FROM avg(duration))::int AS seconds FROM {INC}")],
+          "Mean time a check stays unhealthy once it breaks (a recovery-time proxy).", defaults={"unit": "s"}),
+    panel(7, "Availability by topic and check", "table", 0, 4, 12, 9, [target(
+        f"""SELECT topic, check_type, round(100.0 * count(*) FILTER (WHERE status = 'ok') / count(*), 2) AS pct_ok,
+                   count(*) AS windows, count(*) FILTER (WHERE status = 'warn') AS warns, count(*) FILTER (WHERE status = 'fail') AS fails
+            FROM sq.check_results WHERE {F} GROUP BY 1, 2 ORDER BY pct_ok, fails DESC""")],
+          "Worst first. Colour: green >= 99 %, orange >= 95 %, red below.", overrides=[pct_ok_override]),
+    panel(8, "Quality score over time", "timeseries", 12, 4, 12, 9, [target(
+        f"""SELECT $__timeGroupAlias(window_start, $__interval), topic AS metric, round((100 * avg({SCORE}))::numeric, 2) AS score
+            FROM sq.check_results WHERE {F} GROUP BY 1, 2 ORDER BY 1""", TS)],
+          defaults={"unit": "percent", "min": 0, "max": 100, "custom": {"lineWidth": 2, "fillOpacity": 8}}),
+    panel(9, "Incident log", "table", 0, 13, 14, 10, [target(
+        f"""SELECT started AS {T}, ended, topic, check_type, field, worst_status::text AS worst, windows, fail_windows,
+                   extract(epoch FROM duration)::int AS duration_s
+            FROM {INC} ORDER BY started DESC LIMIT 200""")],
+          "One row per incident (consecutive unhealthy windows of one check; a gap of > 3 window lengths ends an incident).",
+          overrides=[{"matcher": {"id": "byName", "options": "duration_s"}, "properties": [{"id": "unit", "value": "s"}]},
+                     {"matcher": {"id": "byName", "options": "worst"}, "properties": [
+                         {"id": "mappings", "value": [{"type": "value", "options": {"fail": {"text": "FAIL", "color": "red", "index": 0}, "warn": {"text": "WARN", "color": "orange", "index": 1}}}]},
+                         {"id": "custom.cellOptions", "value": {"type": "color-text"}}]}]),
+    panel(10, "Incidents started per hour", "timeseries", 14, 13, 10, 10, [target(
+        f"""SELECT $__timeGroupAlias(started, '1h'), check_type AS metric, count(*) AS incidents FROM {INC} GROUP BY 1, 2 ORDER BY 1""", TS)],
+          defaults={"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}, "fillOpacity": 70}}),
+    panel(11, "Flappiest checks", "table", 0, 23, 8, 9, [target(
+        f"""SELECT topic, check_type, field, count(*) FILTER (WHERE flipped) AS flips, count(*) AS windows,
+                   round(100.0 * count(*) FILTER (WHERE flipped) / count(*), 1) AS flip_pct
+            FROM (SELECT topic, check_type, field, ((status = 'ok') <> (lag(status) OVER w = 'ok')) AS flipped
+                  FROM sq.check_results WHERE {F}
+                  WINDOW w AS (PARTITION BY topic, check_type, field ORDER BY window_start)) s
+            GROUP BY 1, 2, 3 HAVING count(*) FILTER (WHERE flipped) > 0 ORDER BY flips DESC LIMIT 15""")],
+          "Checks that keep flipping between ok and not-ok. Often a threshold that is too tight, not a real problem."),
+    panel(12, "Worst null-rate fields", "table", 8, 23, 8, 9, [target(
+        f"""SELECT topic, field, round((100 * avg(value))::numeric, 2) AS avg_null_pct, round((100 * max(value))::numeric, 2) AS max_null_pct,
+                   count(*) FILTER (WHERE status <> 'ok') AS bad_windows, count(*) AS windows
+            FROM sq.check_results WHERE {F} AND check_type = 'null_rate' GROUP BY 1, 2 ORDER BY avg_null_pct DESC LIMIT 15""")]),
+    panel(13, "Correlated failures", "table", 16, 23, 8, 9, [target(
+        f"""SELECT window_start AS {T}, topic, string_agg(DISTINCT check_type, ', ' ORDER BY check_type) AS failing_checks,
+                   count(DISTINCT check_type) AS n_checks
+            FROM sq.check_results WHERE {F} AND status <> 'ok' GROUP BY window_start, topic
+            HAVING count(DISTINCT check_type) >= 2 ORDER BY 1 DESC LIMIT 100""")],
+          "Windows where two or more different checks broke on the same topic at once: usually one upstream cause."),
+    ts_panel(14, "Volume: now vs same time last week (hourly avg msgs/s)", 0, 32,
+             f"""SELECT date_trunc('hour', window_start) AS {T}, topic AS metric, avg(value) AS msgs_per_s
+                 FROM sq.check_results WHERE check_type = 'volume' AND {F} GROUP BY 1, 2 ORDER BY 1""",
+             f"""SELECT date_trunc('hour', window_start) + interval '7 days' AS {T}, topic || ' (7d ago)' AS metric, avg(value) AS msgs_per_s
+                 FROM sq.check_results WHERE check_type = 'volume' AND {TOPIC_F}
+                   AND window_start >= $__timeFrom()::timestamptz - interval '7 days' AND window_start <= $__timeTo()::timestamptz - interval '7 days'
+                 GROUP BY 1, 2 ORDER BY 1""",
+             "short", "Hourly average throughput against the same hour one week earlier (dashed). Needs a week of history.", w=24),
+]
+d4 = dashboard("sq-analytics", "Stream Quality - Quality analytics", p4, vars4, NAV,
+               "Data-quality score, availability, incidents, flapping checks and week-over-week trends computed with SQL.")
+d4["time"] = {"from": "now-24h", "to": "now"}
+d4["refresh"] = "1m"
+
 OUT.mkdir(exist_ok=True)
-for name, d in (("topic-health", d1), ("field-drilldown", d2), ("violation-log", d3)):
+for name, d in (("topic-health", d1), ("field-drilldown", d2), ("violation-log", d3), ("quality-analytics", d4)):
     (OUT / f"{name}.json").write_text(json.dumps(d, indent=2) + "\n")
 print("wrote", [p.name for p in sorted(OUT.glob("*.json"))])

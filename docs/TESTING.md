@@ -10,7 +10,8 @@ and the Flink job on an embedded Flink 2.2 mini-cluster.
 | Schema (11 assertions) | `make test-schema` | PK upsert idempotency, trigger keeps the newest window, enum ordering, jsonb validation, read-only/writer privileges, retention |
 | End to end (29 assertions) | `make e2e` | Kafka → job → PostgreSQL with scripted faults: null spike, id explosion, 150 s-stale events, schema break, −90 % volume, silence, corrupt JSON; DLQ contents; MVs; heartbeat |
 | Registry outage | `make e2e-outage` | job starts with Apicurio **down**: statistical checks run, no structural rows/failures, structural resumes on recovery |
-| Dashboards | `make e2e` then `make test-dashboards` (strict mode needs the fault data the e2e leaves behind) | every Grafana panel/variable query executes on Postgres as the read-only user (`--strict`: non-empty) |
+| Analytics (23 assertions) | `make test-analytics` | seeds a deterministic history (incidents of known length, a gap that must split one incident into two, flapping, correlated failures, last week's volume) and asserts the EXACT numbers the analytics panels return. The SQL is read from the shipped dashboard JSON, so tested = shipped |
+| Dashboards (39 queries, 4 dashboards) | `make e2e` then `make test-dashboards` (strict mode needs the fault data the e2e leaves behind) | every Grafana panel/variable query executes on Postgres as the read-only user (`--strict`: non-empty) |
 | Alert path | manual (see below) | Flink gauge → Prometheus scrape → rule → Alertmanager → webhook |
 
 `make e2e` needs Kafka, PostgreSQL (database `sq`, `postgres/init/01_init.sql` applied) and optionally Apicurio running locally;

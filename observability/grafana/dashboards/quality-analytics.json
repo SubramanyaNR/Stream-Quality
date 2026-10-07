@@ -1,0 +1,769 @@
+{
+  "uid": "sq-analytics",
+  "title": "Stream Quality - Quality analytics",
+  "description": "Data-quality score, availability, incidents, flapping checks and week-over-week trends computed with SQL.",
+  "tags": [
+    "stream-quality"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "topic",
+        "label": "Topic",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "sq-pg"
+        },
+        "query": "SELECT DISTINCT topic FROM sq.latest_status ORDER BY 1",
+        "definition": "SELECT DISTINCT topic FROM sq.latest_status ORDER BY 1",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Topic health",
+      "type": "link",
+      "url": "/d/sq-topic-health",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Field drill-down",
+      "type": "link",
+      "url": "/d/sq-field-drilldown",
+      "icon": "dashboard"
+    },
+    {
+      "title": "Violation log",
+      "type": "link",
+      "url": "/d/sq-violations",
+      "icon": "bolt"
+    },
+    {
+      "title": "Quality analytics",
+      "type": "link",
+      "url": "/d/sq-analytics",
+      "icon": "apps"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Data-quality score",
+      "type": "stat",
+      "description": "Share of check results that were healthy: ok = 1, warn = 0.5, fail = 0, averaged over every check and window in range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT round((100 * avg(CASE status WHEN 'ok' THEN 1.0 WHEN 'warn' THEN 0.5 ELSE 0.0 END))::numeric, 2) AS score FROM sq.check_results WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 95
+              },
+              {
+                "color": "green",
+                "value": 99
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "title": "Availability (windows OK)",
+      "type": "stat",
+      "description": "Share of check results with status ok, like an SLA for data health.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE status = 'ok') / NULLIF(count(*), 0), 2) AS pct_ok FROM sq.check_results WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 95
+              },
+              {
+                "color": "green",
+                "value": 99
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Open now",
+      "type": "stat",
+      "description": "Checks whose latest window is warn/fail.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS open_now FROM sq.latest_status WHERE status <> 'ok' AND window_end > now() - interval '5 minutes' AND topic IN (${topic:singlequote})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "title": "Incident count",
+      "type": "stat",
+      "description": "Runs of consecutive warn/fail windows for one check, in the selected range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS incidents FROM sq.incidents($__timeFrom(), $__timeTo()) WHERE topic IN (${topic:singlequote})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "title": "Longest incident",
+      "type": "stat",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT extract(epoch FROM max(duration))::int AS seconds FROM sq.incidents($__timeFrom(), $__timeTo()) WHERE topic IN (${topic:singlequote})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "title": "Avg incident duration",
+      "type": "stat",
+      "description": "Mean time a check stays unhealthy once it breaks (a recovery-time proxy).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT extract(epoch FROM avg(duration))::int AS seconds FROM sq.incidents($__timeFrom(), $__timeTo()) WHERE topic IN (${topic:singlequote})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "title": "Availability by topic and check",
+      "type": "table",
+      "description": "Worst first. Colour: green >= 99 %, orange >= 95 %, red below.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT topic, check_type, round(100.0 * count(*) FILTER (WHERE status = 'ok') / count(*), 2) AS pct_ok, count(*) AS windows, count(*) FILTER (WHERE status = 'warn') AS warns, count(*) FILTER (WHERE status = 'fail') AS fails FROM sq.check_results WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote}) GROUP BY 1, 2 ORDER BY pct_ok, fails DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pct_ok"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 95
+                    },
+                    {
+                      "color": "green",
+                      "value": 99
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "title": "Quality score over time",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(window_start, $__interval), topic AS metric, round((100 * avg(CASE status WHEN 'ok' THEN 1.0 WHEN 'warn' THEN 0.5 ELSE 0.0 END))::numeric, 2) AS score FROM sq.check_results WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote}) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "title": "Incident log",
+      "type": "table",
+      "description": "One row per incident (consecutive unhealthy windows of one check; a gap of > 3 window lengths ends an incident).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 14,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT started AS \"time\", ended, topic, check_type, field, worst_status::text AS worst, windows, fail_windows, extract(epoch FROM duration)::int AS duration_s FROM sq.incidents($__timeFrom(), $__timeTo()) WHERE topic IN (${topic:singlequote}) ORDER BY started DESC LIMIT 200"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "duration_s"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "worst"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "fail": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "warn": {
+                        "text": "WARN",
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 10,
+      "title": "Incidents started per hour",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 13,
+        "w": 10,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(started, '1h'), check_type AS metric, count(*) AS incidents FROM sq.incidents($__timeFrom(), $__timeTo()) WHERE topic IN (${topic:singlequote}) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 70
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 11,
+      "title": "Flappiest checks",
+      "type": "table",
+      "description": "Checks that keep flipping between ok and not-ok. Often a threshold that is too tight, not a real problem.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT topic, check_type, field, count(*) FILTER (WHERE flipped) AS flips, count(*) AS windows, round(100.0 * count(*) FILTER (WHERE flipped) / count(*), 1) AS flip_pct FROM (SELECT topic, check_type, field, ((status = 'ok') <> (lag(status) OVER w = 'ok')) AS flipped FROM sq.check_results WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote}) WINDOW w AS (PARTITION BY topic, check_type, field ORDER BY window_start)) s GROUP BY 1, 2, 3 HAVING count(*) FILTER (WHERE flipped) > 0 ORDER BY flips DESC LIMIT 15"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 12,
+      "title": "Worst null-rate fields",
+      "type": "table",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 23,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT topic, field, round((100 * avg(value))::numeric, 2) AS avg_null_pct, round((100 * max(value))::numeric, 2) AS max_null_pct, count(*) FILTER (WHERE status <> 'ok') AS bad_windows, count(*) AS windows FROM sq.check_results WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote}) AND check_type = 'null_rate' GROUP BY 1, 2 ORDER BY avg_null_pct DESC LIMIT 15"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 13,
+      "title": "Correlated failures",
+      "type": "table",
+      "description": "Windows where two or more different checks broke on the same topic at once: usually one upstream cause.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 23,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS \"time\", topic, string_agg(DISTINCT check_type, ', ' ORDER BY check_type) AS failing_checks, count(DISTINCT check_type) AS n_checks FROM sq.check_results WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote}) AND status <> 'ok' GROUP BY window_start, topic HAVING count(DISTINCT check_type) >= 2 ORDER BY 1 DESC LIMIT 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 14,
+      "title": "Volume: now vs same time last week (hourly avg msgs/s)",
+      "type": "timeseries",
+      "description": "Hourly average throughput against the same hour one week earlier (dashed). Needs a week of history.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('hour', window_start) AS \"time\", topic AS metric, avg(value) AS msgs_per_s FROM sq.check_results WHERE check_type = 'volume' AND $__timeFilter(window_start) AND topic IN (${topic:singlequote}) GROUP BY 1, 2 ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('hour', window_start) + interval '7 days' AS \"time\", topic || ' (7d ago)' AS metric, avg(value) AS msgs_per_s FROM sq.check_results WHERE check_type = 'volume' AND topic IN (${topic:singlequote}) AND window_start >= $__timeFrom()::timestamptz - interval '7 days' AND window_start <= $__timeTo()::timestamptz - interval '7 days' GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

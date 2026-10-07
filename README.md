@@ -50,7 +50,8 @@ make gen SCENARIO=volume_drop                  # -80 % then silence
 make gen SCENARIO=bad_payloads                 # corrupt JSON -> dead-letter topic
 # BOOTSTRAP=<host:port> make gen ...           # host-reachable address of your Kafka (default localhost:9092)
 ```
-Then open Grafana: **Topic health** (RAG per topic/check), **Field drill-down**, **Violation log**.
+Then open Grafana: **Topic health** (RAG per topic/check), **Field drill-down**, **Violation log**, and **Quality analytics**
+(data-quality score, availability, incidents with durations, flappiest checks, correlated failures, week-over-week volume).
 
 ## Where things live
 | Path | Purpose |
@@ -68,7 +69,7 @@ Then open Grafana: **Topic health** (RAG per topic/check), **Field drill-down**,
 `sq.check_results`: `topic, field, check_type, window_start, window_end, value, threshold, status(ok|warn|fail), details(jsonb)`
 with a primary key on the window, so replays after a restart **overwrite themselves** (the sink upserts) - no dedup tricks needed
 when querying. `sq.violations` (view: every warn/fail), `sq.latest_status` (kept current by a trigger), `sq.topic_health` (view),
-`sq.job_heartbeat`. Retention is applied hourly by the `postgres-maintenance` container (`RESULTS_RETENTION_DAYS`, default 90).
+`sq.job_heartbeat`, and `sq.incidents(from, to)` (consecutive unhealthy windows grouped into incidents). Retention is applied hourly by the `postgres-maintenance` container (`RESULTS_RETENTION_DAYS`, default 90).
 
 ## Adding a check
 Implement `QualityCheck<ACC>` (accumulate per record, `evaluate` per window), add it to the list in `StreamQualityJob`, add
@@ -79,6 +80,7 @@ thresholds under `defaults:` in `thresholds.yaml`. `ChecksTest` shows the patter
 make test            # 45 unit tests, no services needed
 make test-schema     # behavioural tests of the SQL schema (upsert, trigger, roles, retention)
 make e2e             # real Kafka + Postgres (+ Apicurio) required, see docs/TESTING.md
+make test-analytics  # seeds a known history and asserts the analytics dashboard's numbers exactly
 make test-dashboards # runs every Grafana query against Postgres
 ```
 

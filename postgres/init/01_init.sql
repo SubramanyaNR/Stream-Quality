@@ -72,6 +72,34 @@ SELECT topic, check_type,
 FROM sq.latest_status
 GROUP BY topic, check_type;
 
+-- ---------- 3b. Analytics: incidents ----------
+-- An incident = a run of consecutive non-ok windows for one (topic, check_type, field). It ends at the next ok
+-- window, or when windows stop arriving for > 3 window-lengths (monitor down / topic gone), so a gap never
+-- silently glues two incidents together. A function (not a view) so the time filter is applied BEFORE the
+-- window functions run: dashboards stay fast as the table grows. Incidents are clipped to [from_ts, to_ts].
+CREATE OR REPLACE FUNCTION sq.incidents(from_ts timestamptz, to_ts timestamptz)
+RETURNS TABLE (topic text, check_type text, field text, started timestamptz, ended timestamptz, duration interval,
+               windows bigint, fail_windows bigint, worst_status sq.check_status)
+LANGUAGE sql STABLE AS $$
+    WITH ordered AS (
+        SELECT r.topic, r.check_type, r.field, r.window_start, r.window_end, r.status,
+               lag(r.window_end) OVER (PARTITION BY r.topic, r.check_type, r.field ORDER BY r.window_start) AS prev_end
+        FROM sq.check_results r
+        WHERE r.window_start >= from_ts AND r.window_start <= to_ts
+    ), marked AS (
+        -- the counter ticks on every ok window and every gap, so consecutive bad windows share one group id
+        SELECT o.*, sum(CASE WHEN o.status = 'ok' OR o.prev_end IS NULL
+                                  OR o.window_start - o.prev_end > 3 * (o.window_end - o.window_start) THEN 1 ELSE 0 END)
+                    OVER (PARTITION BY o.topic, o.check_type, o.field ORDER BY o.window_start) AS grp
+        FROM ordered o
+    )
+    SELECT m.topic, m.check_type, m.field, min(m.window_start), max(m.window_end), max(m.window_end) - min(m.window_start),
+           count(*), count(*) FILTER (WHERE m.status = 'fail'), max(m.status)
+    FROM marked m
+    WHERE m.status <> 'ok'
+    GROUP BY m.topic, m.check_type, m.field, m.grp
+$$;
+
 -- ---------- 4. Job heartbeat ----------
 CREATE TABLE IF NOT EXISTS sq.job_heartbeat
 (
@@ -105,3 +133,4 @@ GRANT USAGE ON SCHEMA sq TO sq_writer, sq_reader;
 GRANT SELECT, INSERT, UPDATE ON sq.check_results, sq.latest_status, sq.job_heartbeat TO sq_writer;
 GRANT SELECT ON ALL TABLES IN SCHEMA sq TO sq_reader;                -- includes the views
 GRANT SELECT ON sq.violations, sq.topic_health TO sq_writer;
+GRANT EXECUTE ON FUNCTION sq.incidents(timestamptz, timestamptz) TO sq_reader, sq_writer;

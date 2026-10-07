@@ -36,6 +36,12 @@
       "type": "link",
       "url": "/d/sq-violations",
       "icon": "bolt"
+    },
+    {
+      "title": "Quality analytics",
+      "type": "link",
+      "url": "/d/sq-analytics",
+      "icon": "apps"
     }
   ],
   "panels": [
