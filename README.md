@@ -1,7 +1,7 @@
 # Stream Quality Monitor
 
 In-stream, **operational** data-quality monitoring for Kafka. A Flink job attaches to your **existing** Apache Kafka
-(KRaft) cluster, runs continuous windowed checks on every topic, writes one row per check per window to ClickHouse,
+(KRaft) cluster, runs continuous windowed checks on every topic, writes one row per check per window to PostgreSQL,
 alerts through Alertmanager, and shows it all in Grafana. Think Great Expectations - but running on the stream,
 telling you *now* rather than gating a batch pipeline.
 
@@ -16,7 +16,7 @@ telling you *now* rather than gating a batch pipeline.
 Records that fail validation are routed by a Flink **side output** to a dead-letter Kafka topic (original bytes preserved).
 
 > Scope: Phase 5 (distribution shift / 24 h RocksDB baseline) was deliberately skipped - see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-> Status: built and tested against real Kafka, ClickHouse, Apicurio, Prometheus and Alertmanager; the Docker packaging itself
+> Status: built and tested against real Kafka, PostgreSQL, Apicurio, Prometheus and Alertmanager; the Docker packaging itself
 > could not be executed in the build environment - read [docs/TESTING.md](docs/TESTING.md) before trusting it.
 
 ## Quick start
@@ -36,7 +36,7 @@ make up      # creates the dead-letter topic, builds the Flink image, starts the
 | Grafana (admin/admin) | http://localhost:3000 |
 | Flink | http://localhost:8082 |
 | Prometheus / Alertmanager | http://localhost:9090 / http://localhost:9093 |
-| ClickHouse HTTP | http://localhost:8123 |
+| PostgreSQL | localhost:5432, db `sq` (`sq_reader` / `sq_reader_pw`) |
 
 Kafka and Apicurio are **not** deployed by this project. Optional: `make schemas` registers `config/schemas/*.json`
 (artifact `<topic>-value`) in your registry.
@@ -58,16 +58,17 @@ Then open Grafana: **Topic health** (RAG per topic/check), **Field drill-down**,
 | `config/` | `kafka.properties`, `registry.properties`, `thresholds.yaml`, `schemas/` - the only place connection details live |
 | `flink-job/` | the Flink job (Java 17). `checks/QualityCheck.java` is the contract each check implements |
 | `flink/` | image build + job submit script |
-| `clickhouse/init/01_init.sql` | tables, materialized views, read/write users |
+| `postgres/init/01_init.sql` | tables, views, trigger, retention function, read/write roles |
 | `observability/` | Prometheus rules, Alertmanager, Loki, Alloy, Grafana provisioning; `build_dashboards.py` generates the dashboard JSON |
 | `generator/` | Python event generator + fault scenarios |
 | `scripts/` | DLQ topic creation, schema registration, e2e + dashboard-query tests |
 | `docs/` | architecture and decisions, Kafka connectivity, testing |
 
-## ClickHouse output
-`sq.check_results`: `topic, field, check_type, window_start, window_end, value, threshold, status(ok|warn|fail), details(JSON)`.
-`sq.violations` (every warn/fail), `sq.latest_status`, view `sq.topic_health`, `sq.job_heartbeat`. Replays after a restart
-collapse (ReplacingMergeTree on the window key) - query with `FINAL` or `argMax`.
+## PostgreSQL output
+`sq.check_results`: `topic, field, check_type, window_start, window_end, value, threshold, status(ok|warn|fail), details(jsonb)`
+with a primary key on the window, so replays after a restart **overwrite themselves** (the sink upserts) - no dedup tricks needed
+when querying. `sq.violations` (view: every warn/fail), `sq.latest_status` (kept current by a trigger), `sq.topic_health` (view),
+`sq.job_heartbeat`. Retention is applied hourly by the `postgres-maintenance` container (`RESULTS_RETENTION_DAYS`, default 90).
 
 ## Adding a check
 Implement `QualityCheck<ACC>` (accumulate per record, `evaluate` per window), add it to the list in `StreamQualityJob`, add
@@ -76,10 +77,11 @@ thresholds under `defaults:` in `thresholds.yaml`. `ChecksTest` shows the patter
 ## Development
 ```bash
 make test            # 45 unit tests, no services needed
-make e2e             # real Kafka + ClickHouse (+ Apicurio) required, see docs/TESTING.md
-make test-dashboards # runs every Grafana query against ClickHouse
+make test-schema     # behavioural tests of the SQL schema (upsert, trigger, roles, retention)
+make e2e             # real Kafka + Postgres (+ Apicurio) required, see docs/TESTING.md
+make test-dashboards # runs every Grafana query against Postgres
 ```
 
 ## Security notes
-Demo credentials (`sq_writer_pw`, `admin/admin`) are for local use; change them in `clickhouse/init/01_init.sql` and `.env`
+Demo credentials (`sq_writer_pw`, `admin/admin`) are for local use; change them in `postgres/init/01_init.sql` and `.env`
 before exposing anything. Kafka secrets go in `.env` and are referenced as `${env:NAME}` in `config/kafka.properties`.

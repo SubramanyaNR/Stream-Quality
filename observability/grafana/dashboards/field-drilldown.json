@@ -22,14 +22,11 @@
         "label": "Topic",
         "type": "query",
         "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "sq-ch"
+          "type": "grafana-postgresql-datasource",
+          "uid": "sq-pg"
         },
-        "query": {
-          "rawSql": "SELECT DISTINCT topic FROM sq.latest_status ORDER BY topic",
-          "editorType": "sql",
-          "format": 1
-        },
+        "query": "SELECT DISTINCT topic FROM sq.latest_status ORDER BY 1",
+        "definition": "SELECT DISTINCT topic FROM sq.latest_status ORDER BY 1",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -45,14 +42,11 @@
         "label": "Field",
         "type": "query",
         "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "sq-ch"
+          "type": "grafana-postgresql-datasource",
+          "uid": "sq-pg"
         },
-        "query": {
-          "rawSql": "SELECT DISTINCT field FROM sq.latest_status WHERE field != '' AND topic IN (${topic:singlequote}) ORDER BY field",
-          "editorType": "sql",
-          "format": 1
-        },
+        "query": "SELECT DISTINCT field FROM sq.latest_status WHERE field <> '' AND topic IN (${topic:singlequote}) ORDER BY 1",
+        "definition": "SELECT DISTINCT field FROM sq.latest_status WHERE field <> '' AND topic IN (${topic:singlequote}) ORDER BY 1",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -92,8 +86,8 @@
       "type": "timeseries",
       "description": "Fraction of records where the field is null/missing. Dashed = threshold that was crossed (shown only while violating).",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 0,
@@ -105,24 +99,24 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT window_start AS time, field, value AS null_rate FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'null_rate' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS \"time\", field AS metric, value AS null_rate FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'null_rate' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) ORDER BY 1"
         },
         {
           "refId": "B",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT window_start AS time, concat(field, ' threshold') AS series, threshold FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'null_rate' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) AND status != 'ok' ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS \"time\", field || ' threshold' AS metric, threshold FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'null_rate' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) AND status <> 'ok' ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -165,10 +159,10 @@
       "id": 2,
       "title": "Cardinality (HLL estimate) vs baseline",
       "type": "timeseries",
-      "description": "Approximate distinct values per window (HyperLogLog, ~1.6% error) against the mean of recent windows.",
+      "description": "Approximate distinct values per window (HyperLogLog, ~1.6% error) against the mean of recent healthy windows.",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 12,
@@ -180,24 +174,24 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT window_start AS time, field, value AS distinct_estimate FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'cardinality' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS \"time\", field AS metric, value AS distinct_estimate FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'cardinality' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) ORDER BY 1"
         },
         {
           "refId": "B",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT window_start AS time, concat(field, ' baseline') AS series, JSONExtractFloat(details, 'baseline') AS baseline FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'cardinality' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) AND JSONHas(details, 'baseline') AND JSONType(details, 'baseline') != 'Null' ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS \"time\", field || ' baseline' AS metric, (details->>'baseline')::float8 AS baseline FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'cardinality' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) AND details->>'baseline' IS NOT NULL ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -242,8 +236,8 @@
       "type": "timeseries",
       "description": "Processing time minus the payload timestamp. Status is judged on p95.",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 0,
@@ -255,13 +249,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT * FROM (SELECT window_start AS time, 'p50' AS series, JSONExtractFloat(details, 'p50_ms') AS ms FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p95', value FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p99', JSONExtractFloat(details, 'p99_ms') FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote})) ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT * FROM (SELECT window_start AS \"time\", 'p50' AS metric, (details->>'p50_ms')::float8 AS ms FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p95', value FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p99', (details->>'p99_ms')::float8 FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote})) u ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -281,10 +275,10 @@
       "id": 4,
       "title": "Volume (messages/s) vs baseline",
       "type": "timeseries",
-      "description": "Messages per second per window against the mean of recent windows.",
+      "description": "Messages per second per window against the mean of recent healthy windows.",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 12,
@@ -296,24 +290,24 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT window_start AS time, topic, value AS msgs_per_s FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'volume' AND topic IN (${topic:singlequote}) ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS \"time\", topic AS metric, value AS msgs_per_s FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'volume' AND topic IN (${topic:singlequote}) ORDER BY 1"
         },
         {
           "refId": "B",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT window_start AS time, concat(topic, ' baseline') AS series, JSONExtractFloat(details, 'baseline_rate') AS baseline FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND check_type = 'volume' AND topic IN (${topic:singlequote}) AND JSONType(details, 'baseline_rate') != 'Null' ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS \"time\", topic || ' baseline' AS metric, (details->>'baseline_rate')::float8 AS baseline FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'volume' AND topic IN (${topic:singlequote}) AND details->>'baseline_rate' IS NOT NULL ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -358,8 +352,8 @@
       "type": "state-timeline",
       "description": "",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 0,
@@ -371,13 +365,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT window_start AS time, concat(check_type, if(field = '', '', concat('.', field))) AS series, toUInt8(status) AS status FROM sq.check_results FINAL WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote}) AND (field = '' OR field IN (${field:singlequote})) ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS \"time\", check_type || CASE WHEN field = '' THEN '' ELSE '.' || field END AS metric, CASE status WHEN 'ok' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END AS status FROM sq.check_results WHERE $__timeFilter(window_start) AND topic IN (${topic:singlequote}) AND (field = '' OR field IN (${field:singlequote})) ORDER BY 1"
         }
       ],
       "fieldConfig": {

@@ -2,7 +2,7 @@ package io.streamquality.source;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.streamquality.sink.ChRow;
+import io.streamquality.sink.DbRow;
 import io.streamquality.registry.ApicurioV3Client;
 import io.streamquality.registry.RegistryClient;
 import io.streamquality.registry.RegistryConfig;
@@ -21,7 +21,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
  * user-supplied client properties (the same ones the source/sink will use). Broker-flavour agnostic:
  * only describeCluster().
  */
-public final class HeartbeatFn extends RichMapFunction<Long, ChRow> {
+public final class HeartbeatFn extends RichMapFunction<Long, DbRow> {
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneOffset.UTC);
     private final Properties kafkaClientProps;
     private final String jobId;
@@ -53,7 +53,7 @@ public final class HeartbeatFn extends RichMapFunction<Long, ChRow> {
     }
 
     @Override
-    public ChRow map(Long tick) {
+    public DbRow map(Long tick) {
         String status;
         String clusterId = "";
         try {
@@ -72,7 +72,7 @@ public final class HeartbeatFn extends RichMapFunction<Long, ChRow> {
         n.put("kafka_status", status);
         n.put("kafka_cluster_id", clusterId);
         n.put("registry_status", registry == null ? "disabled" : registry.ping() ? "up" : "down");
-        return new ChRow("job_heartbeat", n.toString());
+        return new DbRow("job_heartbeat", null, n.toString());
     }
 
     @Override

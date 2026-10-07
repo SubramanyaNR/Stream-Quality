@@ -1,4 +1,4 @@
-# Kafka and Apicurio are EXTERNAL. This stack: Flink, ClickHouse, Prometheus,
+# Kafka and Apicurio are EXTERNAL. This stack: Flink, PostgreSQL, Prometheus,
 # Alertmanager, Grafana, Loki (+ Alloy log shipper, + tiny webhook receiver).
 name: stream-quality
 
@@ -13,24 +13,36 @@ x-flink-common: &flink-common
   networks: [sq]
 
 services:
-  clickhouse:
-    image: clickhouse/clickhouse-server:26.3
-    container_name: sq-clickhouse
-    ports: ["8123:8123", "9000:9000"]
+  postgres:
+    image: postgres:17-alpine
+    container_name: sq-postgres
+    ports: ["5432:5432"]
     environment:
-      CLICKHOUSE_DB: sq
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:-admin}
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      POSTGRES_DB: sq
+      POSTGRES_USER: sq_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-admin}
     volumes:
-      - ch-data:/var/lib/clickhouse
-      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
-    ulimits: { nofile: { soft: 262144, hard: 262144 } }
-    healthcheck:   # healthy only after init.sql has run to the end (last step creates the sq_reader user)
-      test: ["CMD-SHELL", "clickhouse-client --user default --password \"$${CLICKHOUSE_PASSWORD}\" -q \"SELECT count() FROM system.users WHERE name = 'sq_reader'\" | grep -qx 1"]
+      - pg-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro       # runs once, on first start of an empty volume
+    healthcheck:   # TCP check: during first-boot init the server only listens on its unix socket; also wait for the LAST init step (sq_reader role)
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sq_admin -d sq && PGPASSWORD=\"$${POSTGRES_PASSWORD}\" psql -h 127.0.0.1 -U sq_admin -d sq -tAc \"SELECT 1 FROM pg_roles WHERE rolname = 'sq_reader'\" | grep -qx 1"]
       interval: 5s
       timeout: 5s
       retries: 40
+    networks: [sq]
+
+  postgres-maintenance:                                      # retention: purge old windows/heartbeats hourly
+    image: postgres:17-alpine
+    container_name: sq-postgres-maintenance
+    depends_on: { postgres: { condition: service_healthy } }
+    environment:
+      PGHOST: postgres
+      PGUSER: sq_admin
+      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:-admin}
+      PGDATABASE: sq
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["while true; do psql -tAc \"SELECT sq.purge_old(${RESULTS_RETENTION_DAYS:-90}, ${HEARTBEAT_RETENTION_DAYS:-14})\"; sleep 3600; done"]
+    restart: unless-stopped
     networks: [sq]
 
   flink-jobmanager:
@@ -79,15 +91,15 @@ services:
     depends_on:
       flink-jobmanager: { condition: service_healthy }
       flink-taskmanager: { condition: service_started }
-      clickhouse: { condition: service_healthy }
+      postgres: { condition: service_healthy }
     restart: "no"
     entrypoint: ["/opt/flink/bin/submit-job.sh"]
     environment:
       JOB_JAR: /opt/flink/usrlib/stream-quality-job.jar
       SQ_CONFIG_DIR: /opt/sq/config
-      CLICKHOUSE_URL: http://clickhouse:8123
-      CLICKHOUSE_USER: sq_writer
-      CLICKHOUSE_PASSWORD: sq_writer_pw
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/sq
+      POSTGRES_USER: sq_writer
+      POSTGRES_PASSWORD: sq_writer_pw
 
   prometheus:
     image: prom/prometheus:v3.13.4
@@ -138,14 +150,13 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/topic-health.json
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
-    depends_on: { clickhouse: { condition: service_healthy } }
+    depends_on: { postgres: { condition: service_healthy } }
     networks: [sq]
 
 networks: { sq: { name: sq } }
-volumes: { ch-data: {}, prom-data: {}, am-data: {}, loki-data: {}, grafana-data: {}, flink-checkpoints: {} }
+volumes: { pg-data: {}, prom-data: {}, am-data: {}, loki-data: {}, grafana-data: {}, flink-checkpoints: {} }

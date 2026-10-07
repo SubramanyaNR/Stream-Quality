@@ -7,13 +7,13 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
-/** CheckResult -> JSONEachRow line for sq.check_results. */
+/** CheckResult -> JSON row for sq.check_results (keyed by the table's primary key so replays collapse). */
 public final class ResultMapper {
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneOffset.UTC);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private ResultMapper() {}
 
-    public static ChRow toRow(CheckResult r, String jobId) {
+    public static DbRow toRow(CheckResult r, String jobId) {
         ObjectNode n = MAPPER.createObjectNode();
         n.put("topic", r.topic());
         n.put("field", r.field());
@@ -25,7 +25,8 @@ public final class ResultMapper {
         n.put("status", r.status().wire());
         n.put("details", r.detailsJson());
         n.put("job_id", jobId);
-        return new ChRow("check_results", n.toString());
+        String key = r.topic() + "|" + r.checkType().wire() + "|" + r.field() + "|" + r.windowStartMs() + "|" + r.windowEndMs();
+        return new DbRow("check_results", key, n.toString());
     }
 
     private static double finite(double d) { return Double.isFinite(d) ? d : 0.0; }

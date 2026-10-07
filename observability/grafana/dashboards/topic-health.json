@@ -45,8 +45,8 @@
       "type": "table",
       "description": "Worst status across fields for each check type, from the latest window. 'no data' = no result in the last 5 minutes (check not configured for the topic, or the topic/monitor is silent). Click a topic to drill down.",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 0,
@@ -58,13 +58,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 1,
-          "queryType": "table",
-          "rawSql": "SELECT topic, if(countIf(check_type = 'volume') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'volume'))) AS volume, if(countIf(check_type = 'null_rate') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'null_rate'))) AS null_rate, if(countIf(check_type = 'cardinality') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'cardinality'))) AS cardinality, if(countIf(check_type = 'freshness') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'freshness'))) AS freshness, if(countIf(check_type = 'structural') = 0, NULL, toUInt8(maxIf(status_n, check_type = 'structural'))) AS structural, max(window_end) AS last_window FROM (SELECT topic, check_type, toUInt8(status) AS status_n, window_end FROM sq.latest_status FINAL WHERE window_end > now64(3) - INTERVAL 5 MINUTE) GROUP BY topic ORDER BY topic"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT topic, max(status_n) FILTER (WHERE check_type = 'volume') AS volume, max(status_n) FILTER (WHERE check_type = 'null_rate') AS null_rate, max(status_n) FILTER (WHERE check_type = 'cardinality') AS cardinality, max(status_n) FILTER (WHERE check_type = 'freshness') AS freshness, max(status_n) FILTER (WHERE check_type = 'structural') AS structural, max(window_end) AS last_window FROM (SELECT topic, check_type, CASE status WHEN 'ok' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END AS status_n, window_end FROM sq.latest_status WHERE window_end > now() - interval '5 minutes') s GROUP BY topic ORDER BY topic"
         }
       ],
       "fieldConfig": {
@@ -356,8 +356,8 @@
       "type": "stat",
       "description": "",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 16,
@@ -369,13 +369,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 1,
-          "queryType": "table",
-          "rawSql": "SELECT countDistinct(topic) AS failing FROM sq.latest_status FINAL WHERE status = 'fail' AND window_end > now64(3) - INTERVAL 5 MINUTE"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(DISTINCT topic) AS failing FROM sq.latest_status WHERE status = 'fail' AND window_end > now() - interval '5 minutes'"
         }
       ],
       "fieldConfig": {
@@ -404,8 +404,8 @@
       "type": "stat",
       "description": "",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 20,
@@ -417,13 +417,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 1,
-          "queryType": "table",
-          "rawSql": "SELECT countDistinct(topic) AS warning FROM sq.latest_status FINAL WHERE status = 'warn' AND window_end > now64(3) - INTERVAL 5 MINUTE"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(DISTINCT topic) AS warning FROM sq.latest_status WHERE status = 'warn' AND window_end > now() - interval '5 minutes'"
         }
       ],
       "fieldConfig": {
@@ -452,8 +452,8 @@
       "type": "stat",
       "description": "Seconds since the Flink job last wrote a heartbeat.",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 16,
@@ -465,13 +465,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 1,
-          "queryType": "table",
-          "rawSql": "SELECT dateDiff('second', max(ts), now64(3)) AS age_s FROM sq.job_heartbeat"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT extract(epoch FROM now() - max(ts))::int AS age_s FROM sq.job_heartbeat"
         }
       ],
       "fieldConfig": {
@@ -505,8 +505,8 @@
       "type": "stat",
       "description": "",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 20,
@@ -518,13 +518,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 1,
-          "queryType": "table",
-          "rawSql": "SELECT argMax(kafka_status, ts) AS kafka FROM sq.job_heartbeat"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT kafka_status AS kafka FROM sq.job_heartbeat ORDER BY ts DESC LIMIT 1"
         }
       ],
       "fieldConfig": {
@@ -555,8 +555,8 @@
       "type": "stat",
       "description": "disabled / up / down. When down, structural checks are skipped; statistical checks continue.",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 16,
@@ -568,13 +568,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 1,
-          "queryType": "table",
-          "rawSql": "SELECT argMax(registry_status, ts) AS registry FROM sq.job_heartbeat"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT registry_status AS registry FROM sq.job_heartbeat ORDER BY ts DESC LIMIT 1"
         }
       ],
       "fieldConfig": {
@@ -613,8 +613,8 @@
       "type": "timeseries",
       "description": "",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 0,
@@ -626,13 +626,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT toStartOfInterval(window_end, INTERVAL 1 MINUTE) AS time, check_type, count() AS violations FROM sq.violations FINAL WHERE $__timeFilter(window_end) GROUP BY time, check_type ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(window_end, '1m'), check_type AS metric, count(*) AS violations FROM sq.violations WHERE $__timeFilter(window_end) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {

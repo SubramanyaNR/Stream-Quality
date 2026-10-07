@@ -8,7 +8,7 @@ import io.streamquality.config.Thresholds;
 import io.streamquality.model.CheckResult;
 import io.streamquality.model.CheckType;
 import io.streamquality.model.ParsedRecord;
-import io.streamquality.sink.ChRow;
+import io.streamquality.sink.DbRow;
 import io.streamquality.sink.ResultMapper;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -61,7 +61,7 @@ public final class CompositeCheck {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static final class Eval extends ProcessWindowFunction<Acc, ChRow, String, TimeWindow> {
+    public static final class Eval extends ProcessWindowFunction<Acc, DbRow, String, TimeWindow> {
         private final List<QualityCheck<?>> checks;
         private final Thresholds thresholds;
         private final String jobId;
@@ -98,7 +98,7 @@ public final class CompositeCheck {
         }
 
         @Override
-        public void process(String topic, Context ctx, Iterable<Acc> elements, Collector<ChRow> out) throws Exception {
+        public void process(String topic, Context ctx, Iterable<Acc> elements, Collector<DbRow> out) throws Exception {
             Acc acc = elements.iterator().next();
             MapState<String, List<Double>> hist =
                     ctx.globalState().getMapState(new MapStateDescriptor<>("history", Types.STRING, Types.LIST(Types.DOUBLE)));

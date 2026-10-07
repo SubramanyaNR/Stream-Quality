@@ -22,14 +22,11 @@
         "label": "Topic",
         "type": "query",
         "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "sq-ch"
+          "type": "grafana-postgresql-datasource",
+          "uid": "sq-pg"
         },
-        "query": {
-          "rawSql": "SELECT DISTINCT topic FROM sq.violations ORDER BY topic",
-          "editorType": "sql",
-          "format": 1
-        },
+        "query": "SELECT DISTINCT topic FROM sq.violations ORDER BY 1",
+        "definition": "SELECT DISTINCT topic FROM sq.violations ORDER BY 1",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -45,14 +42,11 @@
         "label": "Check",
         "type": "query",
         "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "sq-ch"
+          "type": "grafana-postgresql-datasource",
+          "uid": "sq-pg"
         },
-        "query": {
-          "rawSql": "SELECT DISTINCT check_type FROM sq.violations ORDER BY check_type",
-          "editorType": "sql",
-          "format": 1
-        },
+        "query": "SELECT DISTINCT check_type FROM sq.violations ORDER BY 1",
+        "definition": "SELECT DISTINCT check_type FROM sq.violations ORDER BY 1",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -68,14 +62,11 @@
         "label": "Status",
         "type": "query",
         "datasource": {
-          "type": "grafana-clickhouse-datasource",
-          "uid": "sq-ch"
+          "type": "grafana-postgresql-datasource",
+          "uid": "sq-pg"
         },
-        "query": {
-          "rawSql": "SELECT DISTINCT toString(status) FROM sq.violations ORDER BY 1",
-          "editorType": "sql",
-          "format": 1
-        },
+        "query": "SELECT DISTINCT status::text FROM sq.violations ORDER BY 1",
+        "definition": "SELECT DISTINCT status::text FROM sq.violations ORDER BY 1",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -115,8 +106,8 @@
       "type": "table",
       "description": "Every warn/fail result, newest first (max 1000 rows in the selected range). `details` holds the check-specific JSON.",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 0,
@@ -128,13 +119,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 1,
-          "queryType": "table",
-          "rawSql": "SELECT window_end AS time, topic, field, check_type, toString(status) AS status, round(value, 4) AS value, round(threshold, 4) AS threshold, details FROM sq.violations FINAL WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND toString(status) IN (${status:singlequote}) ORDER BY window_end DESC LIMIT 1000"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT window_end AS \"time\", topic, field, check_type, status::text AS status, round(value::numeric, 4) AS value, round(threshold::numeric, 4) AS threshold, details::text AS details FROM sq.violations WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND status::text IN (${status:singlequote}) ORDER BY window_end DESC LIMIT 1000"
         }
       ],
       "fieldConfig": {
@@ -200,8 +191,8 @@
       "type": "timeseries",
       "description": "",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 0,
@@ -213,13 +204,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 0,
-          "queryType": "timeseries",
-          "rawSql": "SELECT toStartOfInterval(window_end, INTERVAL 1 MINUTE) AS time, toString(status) AS status, count() AS n FROM sq.violations FINAL WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND toString(status) IN (${status:singlequote}) GROUP BY time, status ORDER BY time"
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(window_end, '1m'), status::text AS metric, count(*) AS n FROM sq.violations WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND status::text IN (${status:singlequote}) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -273,8 +264,8 @@
       "type": "table",
       "description": "",
       "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "sq-ch"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 12,
@@ -286,13 +277,13 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "sq-ch"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "editorType": "sql",
-          "format": 1,
-          "queryType": "table",
-          "rawSql": "SELECT topic, field, check_type, countIf(status = 'fail') AS fails, countIf(status = 'warn') AS warns FROM sq.violations FINAL WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND toString(status) IN (${status:singlequote}) GROUP BY topic, field, check_type ORDER BY fails DESC, warns DESC LIMIT 20"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT topic, field, check_type, count(*) FILTER (WHERE status = 'fail') AS fails, count(*) FILTER (WHERE status = 'warn') AS warns FROM sq.violations WHERE $__timeFilter(window_end) AND topic IN (${topic:singlequote}) AND check_type IN (${check:singlequote}) AND status::text IN (${status:singlequote}) GROUP BY topic, field, check_type ORDER BY fails DESC, warns DESC LIMIT 20"
         }
       ],
       "fieldConfig": {

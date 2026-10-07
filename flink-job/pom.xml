@@ -18,6 +18,7 @@
         <flink.version>2.2.1</flink.version>
         <flink.kafka.connector.version>5.0.0-2.2</flink.kafka.connector.version>
 
+        <postgresql.version>42.7.12</postgresql.version>
         <jackson.version>2.18.2</jackson.version>
         <datasketches.version>6.2.0</datasketches.version>
         <json-schema-validator.version>1.5.6</json-schema-validator.version>
@@ -67,6 +68,13 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-base</artifactId>
             <version>${flink.version}</version>
+        </dependency>
+
+        <!-- ===== Results store: JDBC driver, shaded into the fat jar (registers itself via ServiceLoader) ===== -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
         </dependency>
 
         <!-- ===== Payload parsing + config ===== -->

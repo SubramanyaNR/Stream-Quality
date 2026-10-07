@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
-"""Assertions for scripts/e2e-local.sh. Usage: e2e_assert.py <ch_url> <ch_user:pw> <bootstrap> <dlq_topic> <since_epoch_s>"""
+"""Assertions for scripts/e2e-local.sh. Usage: e2e_assert.py <bootstrap> <dlq_topic> <since_epoch_s> [registry_on:true|false]"""
 import base64
 import json
 import sys
-import urllib.parse
-import urllib.request
 
-ch_url, auth, bootstrap, dlq, since = sys.argv[1:6]
-REGISTRY = len(sys.argv) > 6 and sys.argv[6] == "true"
-user, pw = auth.split(":", 1)
+import pgutil
+
+bootstrap, dlq, since = sys.argv[1:4]
+REGISTRY = len(sys.argv) > 4 and sys.argv[4] == "true"
 fails = []
-
-
-def q(sql):
-    req = urllib.request.Request(ch_url + "/?" + urllib.parse.urlencode({"query": sql + " FORMAT JSONEachRow"}),
-                                 headers={"X-ClickHouse-User": user, "X-ClickHouse-Key": pw})
-    body = urllib.request.urlopen(req, timeout=20).read().decode()
-    return [json.loads(l) for l in body.splitlines() if l.strip()]
 
 
 def check(name, cond, info=""):
@@ -25,13 +17,16 @@ def check(name, cond, info=""):
         fails.append(name)
 
 
-S = f"window_start >= toDateTime64({since}, 3) "
-hb = q("SELECT count() c, countIf(kafka_status='up') up, any(kafka_cluster_id) cid FROM sq.job_heartbeat")[0]
-check("heartbeat rows written, Kafka reachable", int(hb["c"]) >= 2 and int(hb["up"]) >= 2, hb)
-check("heartbeat carries cluster id", hb["cid"] != "", hb)
+q = pgutil.query
+S = f"window_start >= to_timestamp({since}) "
+hb = q("SELECT count(*) AS c, count(*) FILTER (WHERE kafka_status = 'up') AS up, max(kafka_cluster_id) AS cid FROM sq.job_heartbeat")[0]
+check("heartbeat rows written, Kafka reachable", hb["c"] >= 2 and hb["up"] >= 2, hb)
+check("heartbeat carries cluster id", bool(hb["cid"]), hb)
+
 
 def rows(extra):
-    return q(f"SELECT status, value, threshold, window_start, details FROM sq.check_results WHERE {S} AND {extra} ORDER BY window_start")
+    return q(f"SELECT status::text AS status, value, threshold, window_start, details::text AS details FROM sq.check_results WHERE {S} AND {extra} ORDER BY window_start")
+
 
 o_cust = rows("topic='orders' AND check_type='null_rate' AND field='customer_id'")
 check("null_rate customer_id: has ok windows", any(r["status"] == "ok" for r in o_cust), len(o_cust))
@@ -54,7 +49,7 @@ check("payments never failed once flowing (isolation between topics)",
 o_card = rows("topic='orders' AND check_type='cardinality' AND field='customer_id'")
 check("cardinality customer_id: baseline ~15 distinct, ok", any(r["status"] == "ok" and 10 <= r["value"] <= 20 for r in o_card), [(r["status"], round(r["value"])) for r in o_card])
 check("cardinality customer_id: id explosion -> FAIL (>5x)", any(r["status"] == "fail" and r["value"] > 60 for r in o_card), [(r["status"], round(r["value"])) for r in o_card])
-check("cardinality: untracked fields produce no rows", not q(f"SELECT 1 FROM sq.check_results WHERE {S} AND check_type='cardinality' AND field != 'customer_id' LIMIT 1"))
+check("cardinality: untracked fields produce no rows", not q(f"SELECT 1 FROM sq.check_results WHERE {S} AND check_type='cardinality' AND field <> 'customer_id' LIMIT 1"))
 o_fr = rows("topic='orders' AND check_type='freshness'")
 check("freshness orders: healthy p95 < 5 s", any(r["status"] == "ok" and r["value"] < 5000 for r in o_fr), [(r["status"], round(r["value"])) for r in o_fr])
 check("freshness orders: 150 s-old events -> FAIL (measured, not dropped as late)", any(r["status"] == "fail" and 140_000 < r["value"] < 175_000 for r in o_fr), [(r["status"], round(r["value"])) for r in o_fr])
@@ -68,15 +63,17 @@ if REGISTRY:
           any(r["status"] == "fail" and "amount" in r["details"] and r["value"] > 0.15 for r in o_st), [(r["status"], round(r["value"], 3)) for r in o_st])
     p_st = rows("topic='payments' AND check_type='structural'")
     check("structural payments: always ok (schema-valid traffic)", p_st and all(r["status"] == "ok" for r in p_st), [(r["status"], round(r["value"], 3)) for r in p_st])
-    check("heartbeat reports registry up", int(q("SELECT countIf(registry_status='up') c FROM sq.job_heartbeat")[0]["c"]) >= 1)
+    check("heartbeat reports registry up", q("SELECT count(*) AS c FROM sq.job_heartbeat WHERE registry_status = 'up'")[0]["c"] >= 1)
 else:
     print("SKIP structural assertions (registry disabled)")
 
-dups = q("SELECT count() c, uniqExact(topic, field, check_type, window_start, window_end) u FROM sq.check_results FINAL")[0]
-check("one row per (topic, field, check, window)", int(dups["c"]) == int(dups["u"]), dups)
-v = q("SELECT count() c FROM sq.violations FINAL")[0]
-check("violations table populated by materialized view", int(v["c"]) > 0, v)
-th = q("SELECT topic, check_type, worst_status FROM sq.topic_health")
+dups = q("SELECT count(*) AS c, count(DISTINCT (topic, field, check_type, window_start, window_end)) AS u FROM sq.check_results")[0]
+check("one row per (topic, field, check, window)", dups["c"] == dups["u"], dups)
+v = q("SELECT count(*) AS c FROM sq.violations")[0]
+check("violations view populated", v["c"] > 0, v)
+ls = q("SELECT count(*) AS c FROM sq.latest_status")[0]
+check("latest_status trigger populated the table", ls["c"] > 0, ls)
+th = q("SELECT topic, check_type, worst_status::text AS worst FROM sq.topic_health")
 check("topic_health view returns rows", len(th) > 0, th)
 
 # --- dead-letter topic ---

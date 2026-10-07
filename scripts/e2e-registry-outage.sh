@@ -5,7 +5,8 @@
 # Same prereqs as e2e-local.sh plus hooks:  E2E_REGISTRY_STOP / E2E_REGISTRY_START (shell commands; START must return quickly)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-BOOT=${E2E_BOOTSTRAP:-127.0.0.1:19092}; CH=${E2E_CH_URL:-http://127.0.0.1:8123}; CH_ADMIN=${E2E_CH_ADMIN:-default:admin}
+BOOT=${E2E_BOOTSTRAP:-127.0.0.1:19092}
+PGURL="jdbc:postgresql://${E2E_PG_HOST:-127.0.0.1}:${E2E_PG_PORT:-5432}/${E2E_PG_DB:-sq}"
 REG=${E2E_REGISTRY_URL:-http://127.0.0.1:18081/apis/registry/v3}; DLQ=sq.e2e-dead-letter; WORK=${E2E_WORK:-/tmp/sq-e2e-outage}
 : "${KAFKA_HOME:?}" "${E2E_REGISTRY_STOP:?}" "${E2E_REGISTRY_START:?}"
 export JAVA_TOOL_OPTIONS=""; rm -rf "$WORK"; mkdir -p "$WORK/config"
@@ -13,7 +14,7 @@ export JAVA_TOOL_OPTIONS=""; rm -rf "$WORK"; mkdir -p "$WORK/config"
 for t in orders payments "$DLQ"; do "$KAFKA_HOME/bin/kafka-topics.sh" --bootstrap-server "$BOOT" --delete --topic "$t" >/dev/null 2>&1 || true; done
 sleep 2
 for t in orders payments "$DLQ"; do "$KAFKA_HOME/bin/kafka-topics.sh" --bootstrap-server "$BOOT" --create --topic "$t" --partitions 2 --replication-factor 1 >/dev/null; done
-for tbl in check_results violations latest_status job_heartbeat; do curl -sf -u "$CH_ADMIN" "$CH" --data-binary "TRUNCATE TABLE sq.$tbl" >/dev/null; done
+python3 scripts/pg_sql.py "TRUNCATE sq.check_results, sq.latest_status, sq.job_heartbeat"
 
 eval "$E2E_REGISTRY_STOP" || true
 for _ in $(seq 1 20); do curl -sf -m 2 "$REG/system/info" >/dev/null 2>&1 || break; sleep 1; done
@@ -29,7 +30,7 @@ sed -e 's/size: 60s/size: 5s/' -e 's/max_out_of_orderness: 5s/max_out_of_orderne
 ( cd flink-job && mvn -q -B -DskipTests compile && mvn -q -B dependency:build-classpath -Dmdep.outputFile="$WORK/cp.txt" )
 SLF4J=$(find ~/.m2 -name 'slf4j-simple-*.jar' | head -1)
 java -cp "flink-job/target/classes:$(cat "$WORK/cp.txt"):$SLF4J" io.streamquality.StreamQualityJob --config-dir "$WORK/config" \
-  --clickhouse.url "$CH" --clickhouse.user "${CH_ADMIN%%:*}" --clickhouse.password "${CH_ADMIN#*:}" --heartbeat.interval.sec 3 > "$WORK/job.log" 2>&1 &
+  --postgres.url "$PGURL" --postgres.user sq_writer --postgres.password sq_writer_pw --heartbeat.interval.sec 3 > "$WORK/job.log" 2>&1 &
 JOB=$!; trap 'kill $JOB 2>/dev/null || true' EXIT
 for _ in $(seq 1 60); do grep -q "Assigned to partition" "$WORK/job.log" && break; sleep 1; done
 
@@ -41,4 +42,4 @@ for _ in $(seq 1 90); do curl -sf -m 2 "$REG/system/info" >/dev/null 2>&1 && bre
 python3 scripts/register_schemas.py --url "$REG" >/dev/null; T_UP=$(date +%s)
 echo "registry UP and schemas registered after $((T_UP - T0))s; waiting for generator + windows to close"
 wait $GEN; sleep 12
-python3 scripts/e2e_outage_assert.py "$CH" "$CH_ADMIN" "$T0" "$T_UP"
+python3 scripts/e2e_outage_assert.py "$T0" "$T_UP"

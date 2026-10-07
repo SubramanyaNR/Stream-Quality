@@ -30,9 +30,9 @@ import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.util.OutputTag;
-import io.streamquality.sink.ChRow;
-import io.streamquality.sink.ClickHouseConfig;
-import io.streamquality.sink.ClickHouseSink;
+import io.streamquality.sink.DbRow;
+import io.streamquality.sink.PostgresConfig;
+import io.streamquality.sink.PostgresSink;
 import io.streamquality.source.HeartbeatFn;
 import java.nio.file.Path;
 import java.util.Properties;
@@ -52,12 +52,12 @@ import org.apache.flink.util.ParameterTool;
  *        │                      └─ side output DLQ_TAG ──> KafkaSink(sq.dead-letter)
  *        │
  *        └─> keyBy(topic) ─> window(Tumbling event-time) ─> CompositeCheckWindowFn(List<QualityCheck>)
- *                              ├─ CheckResult ──> ClickHouseSink (sq.check_results)
+ *                              ├─ CheckResult ──> PostgresSink (sq.check_results)
  *                              └─ cardinality only: small per-(topic,field) ring of recent estimates in keyed state
- *   Heartbeat source (1/min) ──────────────────────────────────> ClickHouseSink (sq.job_heartbeat)
+ *   Heartbeat source (1/min) ──────────────────────────────────> PostgresSink (sq.job_heartbeat)
  *
- * Args: --config-dir, --clickhouse.url, --clickhouse.user, --clickhouse.password (all also via env
- * CLICKHOUSE_URL/USER/PASSWORD), --heartbeat.interval.sec (60), --heartbeat.max (0 = unbounded).
+ * Args: --config-dir, --postgres.url, --postgres.user, --postgres.password (all also via env
+ * POSTGRES_URL/USER/PASSWORD), --heartbeat.interval.sec (60), --heartbeat.max (0 = unbounded).
  */
 public final class StreamQualityJob {
     static final String VERSION = "0.1.0";
@@ -84,10 +84,10 @@ public final class StreamQualityJob {
         // Cluster config (docker-compose) normally sets this; make the job safe when run without it.
         if (!env.getCheckpointConfig().isCheckpointingEnabled()) env.enableCheckpointing(30_000);
 
-        ClickHouseConfig ch = ClickHouseConfig.of(
-                arg(params, "clickhouse.url", "CLICKHOUSE_URL", "http://clickhouse:8123"),
-                arg(params, "clickhouse.user", "CLICKHOUSE_USER", "sq_writer"),
-                arg(params, "clickhouse.password", "CLICKHOUSE_PASSWORD", "sq_writer_pw"));
+        PostgresConfig pg = PostgresConfig.of(
+                arg(params, "postgres.url", "POSTGRES_URL", "jdbc:postgresql://postgres:5432/sq"),
+                arg(params, "postgres.user", "POSTGRES_USER", "sq_writer"),
+                arg(params, "postgres.password", "POSTGRES_PASSWORD", "sq_writer_pw"));
 
         RegistryConfig registryCfg = RegistryConfig.from(registry);
         String jobId = params.get("job-id", "sq-" + java.util.UUID.randomUUID().toString().substring(0, 8));
@@ -110,7 +110,7 @@ public final class StreamQualityJob {
         long hbMax = params.getLong("heartbeat.max", 0);
         DataGeneratorSource<Long> hbTicks = new DataGeneratorSource<>(i -> i, hbMax > 0 ? hbMax : Long.MAX_VALUE,
                 RateLimiterStrategy.perSecond(1.0 / hbSec), Types.LONG);
-        DataStream<ChRow> heartbeat = env.fromSource(hbTicks, WatermarkStrategy.noWatermarks(), "heartbeat-ticks")
+        DataStream<DbRow> heartbeat = env.fromSource(hbTicks, WatermarkStrategy.noWatermarks(), "heartbeat-ticks")
                 .setParallelism(1)
                 .map(new HeartbeatFn(kafkaClient, jobId, VERSION, registryCfg)).name("heartbeat").setParallelism(1);
 
@@ -144,7 +144,7 @@ public final class StreamQualityJob {
         // ---- windowed checks ----
         List<QualityCheck<?>> checks = List.of(new VolumeCheck(), new NullRateCheck(), new CardinalityCheck(th), new FreshnessCheck(), new StructuralCheck());
         OutputTag<ParsedRecord> late = new OutputTag<>("late") {};
-        SingleOutputStreamOperator<ChRow> results = parsed.union(ticks)
+        SingleOutputStreamOperator<DbRow> results = parsed.union(ticks)
                 .assignTimestampsAndWatermarks(WatermarkStrategy
                         .<ParsedRecord>forBoundedOutOfOrderness(Duration.ofMillis(th.maxOutOfOrdernessMs()))
                         .withTimestampAssigner((r, ts) -> r.processingTimeMs())   // INGESTION time: windows = what arrived, so stale events are still measured
@@ -156,7 +156,7 @@ public final class StreamQualityJob {
                 .name("window-checks");
         results.getSideOutput(late).flatMap(new LateCounterFn()).name("late-records-metric");
 
-        heartbeat.union(results).sinkTo(new ClickHouseSink(ch)).name("clickhouse").setParallelism(1);
+        heartbeat.union(results).sinkTo(new PostgresSink(pg)).name("postgres").setParallelism(1);
 
                 // Phase 5 (distribution shift, 24h baseline): intentionally skipped
     }

@@ -1,7 +1,12 @@
 apiVersion: 1
 datasources:
-  - { name: ClickHouse, uid: sq-ch, type: grafana-clickhouse-datasource, isDefault: true,
-      jsonData: { host: clickhouse, port: 9000, protocol: native, defaultDatabase: sq, username: sq_reader },
-      secureJsonData: { password: sq_reader_pw } }
+  - name: Postgres
+    uid: sq-pg
+    type: grafana-postgresql-datasource       # built into Grafana: no plugin to download
+    url: postgres:5432
+    user: sq_reader                           # read-only role from postgres/init/01_init.sql
+    isDefault: true
+    jsonData: { database: sq, sslmode: disable, postgresVersion: 1700, timescaledb: false, maxOpenConns: 10 }
+    secureJsonData: { password: sq_reader_pw }
   - { name: Prometheus, uid: sq-prom, type: prometheus, url: "http://prometheus:9090" }
   - { name: Loki, uid: sq-loki, type: loki, url: "http://loki:3100" }
