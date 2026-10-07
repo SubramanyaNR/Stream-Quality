@@ -300,39 +300,84 @@
     },
     {
       "id": 4,
-      "title": "Alert notifications (Alertmanager webhook, via Loki)",
-      "type": "logs",
-      "description": "",
+      "title": "Alert history",
+      "type": "table",
+      "description": "Every alert Alertmanager delivered (stored by the alert-sink in sq.alert_events). One row per alert instance: when it fired, when it resolved, how long it lasted.",
       "datasource": {
-        "type": "loki",
-        "uid": "sq-loki"
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
       },
       "gridPos": {
         "x": 0,
         "y": 21,
         "w": 24,
-        "h": 8
+        "h": 9
       },
       "targets": [
         {
           "refId": "A",
           "datasource": {
-            "type": "loki",
-            "uid": "sq-loki"
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
           },
-          "expr": "{service=\"alert-sink\"} | json",
-          "queryType": "range"
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT fired_at AS \"time\", resolved_at, alertname, severity, topic, check_type, field, CASE WHEN firing THEN 'FIRING' ELSE 'resolved' END AS state, extract(epoch FROM duration)::int AS duration_s FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR topic IN (${topic:singlequote})) ORDER BY fired_at DESC LIMIT 200"
         }
       ],
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "state"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "FIRING": {
+                        "text": "FIRING",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "resolved": {
+                        "text": "resolved",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "duration_s"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
       },
-      "options": {
-        "showTime": true,
-        "wrapLogMessage": true,
-        "sortOrder": "Descending"
-      }
+      "options": {}
     }
   ],
   "annotations": {

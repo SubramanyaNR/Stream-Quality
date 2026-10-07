@@ -109,6 +109,41 @@ CREATE TABLE IF NOT EXISTS sq.job_heartbeat
     PRIMARY KEY (job_id, ts)
 );
 
+-- ---------- 4b. Alert history (written by tools/alert-sink from Alertmanager webhooks) ----------
+-- One row per (alert instance, status): Alertmanager re-sends "firing" notifications every repeat_interval, so the
+-- unique key (fingerprint, status, starts_at) makes those repeats no-ops and leaves exactly one 'firing' and one
+-- 'resolved' row per alert instance.
+CREATE TABLE IF NOT EXISTS sq.alert_events
+(
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    received_at timestamptz NOT NULL DEFAULT now(),
+    status      text        NOT NULL CHECK (status IN ('firing', 'resolved')),
+    fingerprint text        NOT NULL,
+    alertname   text        NOT NULL,
+    severity    text        NOT NULL DEFAULT '',
+    topic       text        NOT NULL DEFAULT '',
+    check_type  text        NOT NULL DEFAULT '',
+    field       text        NOT NULL DEFAULT '',
+    starts_at   timestamptz NOT NULL,
+    ends_at     timestamptz,                                        -- NULL while firing
+    summary     text        NOT NULL DEFAULT '',
+    labels      jsonb       NOT NULL DEFAULT '{}',
+    annotations jsonb       NOT NULL DEFAULT '{}',
+    UNIQUE (fingerprint, status, starts_at)
+);
+CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at ON sq.alert_events (starts_at DESC);
+
+-- One row per alert instance: when it fired, when (if) it resolved, how long it lasted.
+CREATE OR REPLACE VIEW sq.alert_history AS
+SELECT f.alertname, f.severity, f.topic, f.check_type, f.field, f.summary,
+       f.starts_at                              AS fired_at,
+       r.ends_at                                AS resolved_at,
+       COALESCE(r.ends_at, now()) - f.starts_at AS duration,
+       r.ends_at IS NULL                        AS firing
+FROM sq.alert_events f
+LEFT JOIN sq.alert_events r ON r.fingerprint = f.fingerprint AND r.starts_at = f.starts_at AND r.status = 'resolved'
+WHERE f.status = 'firing';
+
 -- ---------- 5. Retention ----------
 -- Plain DELETEs are fine at this volume (~1 row/field/minute). If you shorten windows or monitor thousands of
 -- fields (> ~100M rows), convert check_results to PARTITION BY RANGE (window_start) or use TimescaleDB.
@@ -120,6 +155,7 @@ BEGIN
     GET DIAGNOSTICS n = ROW_COUNT;
     DELETE FROM sq.job_heartbeat WHERE ts < now() - make_interval(days => heartbeat_days);
     GET DIAGNOSTICS m = ROW_COUNT;
+    DELETE FROM sq.alert_events WHERE starts_at < now() - make_interval(days => results_days);   -- alert history follows result retention
     RETURN n + m;
 END $$;
 
@@ -131,6 +167,7 @@ DO $$ BEGIN
 END $$;
 GRANT USAGE ON SCHEMA sq TO sq_writer, sq_reader;
 GRANT SELECT, INSERT, UPDATE ON sq.check_results, sq.latest_status, sq.job_heartbeat TO sq_writer;
+GRANT SELECT, INSERT ON sq.alert_events TO sq_writer;                 -- the alert-sink (inserts only: it cannot rewrite history)
 GRANT SELECT ON ALL TABLES IN SCHEMA sq TO sq_reader;                -- includes the views
 GRANT SELECT ON sq.violations, sq.topic_health TO sq_writer;
 GRANT EXECUTE ON FUNCTION sq.incidents(timestamptz, timestamptz) TO sq_reader, sq_writer;

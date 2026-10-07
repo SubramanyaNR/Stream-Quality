@@ -51,7 +51,7 @@ make gen SCENARIO=bad_payloads                 # corrupt JSON -> dead-letter top
 # BOOTSTRAP=<host:port> make gen ...           # host-reachable address of your Kafka (default localhost:9092)
 ```
 Then open Grafana: **Topic health** (RAG per topic/check), **Field drill-down**, **Violation log**, and **Quality analytics**
-(data-quality score, availability, incidents with durations, flappiest checks, correlated failures, week-over-week volume).
+(data-quality score, availability, incidents with durations, flappiest checks, correlated failures, week-over-week volume, alert history).
 
 ## Where things live
 | Path | Purpose |
@@ -60,7 +60,8 @@ Then open Grafana: **Topic health** (RAG per topic/check), **Field drill-down**,
 | `flink-job/` | the Flink job (Java 17). `checks/QualityCheck.java` is the contract each check implements |
 | `flink/` | image build + job submit script |
 | `postgres/init/01_init.sql` | tables, views, trigger, retention function, read/write roles |
-| `observability/` | Prometheus rules, Alertmanager, Loki, Alloy, Grafana provisioning; `build_dashboards.py` generates the dashboard JSON |
+| `observability/` | Prometheus rules, Alertmanager, Grafana provisioning; `build_dashboards.py` generates the dashboard JSON |
+| `tools/alert-sink/` | Alertmanager webhook receiver that stores alerts in Postgres (`sq.alert_events`) |
 | `generator/` | Python event generator + fault scenarios |
 | `scripts/` | DLQ topic creation, schema registration, e2e + dashboard-query tests |
 | `docs/` | architecture and decisions, Kafka connectivity, testing |
@@ -69,7 +70,7 @@ Then open Grafana: **Topic health** (RAG per topic/check), **Field drill-down**,
 `sq.check_results`: `topic, field, check_type, window_start, window_end, value, threshold, status(ok|warn|fail), details(jsonb)`
 with a primary key on the window, so replays after a restart **overwrite themselves** (the sink upserts) - no dedup tricks needed
 when querying. `sq.violations` (view: every warn/fail), `sq.latest_status` (kept current by a trigger), `sq.topic_health` (view),
-`sq.job_heartbeat`, and `sq.incidents(from, to)` (consecutive unhealthy windows grouped into incidents). Retention is applied hourly by the `postgres-maintenance` container (`RESULTS_RETENTION_DAYS`, default 90).
+`sq.job_heartbeat`, `sq.alert_events` / `sq.alert_history` (every alert Alertmanager delivered: when it fired, when it resolved), and `sq.incidents(from, to)` (consecutive unhealthy windows grouped into incidents). Retention is applied hourly by the `postgres-maintenance` container (`RESULTS_RETENTION_DAYS`, default 90).
 
 ## Adding a check
 Implement `QualityCheck<ACC>` (accumulate per record, `evaluate` per window), add it to the list in `StreamQualityJob`, add

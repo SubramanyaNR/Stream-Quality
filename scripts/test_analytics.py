@@ -17,7 +17,7 @@ def check(name, cond, info=""):
         fails.append(name)
 
 
-pgutil.execute("TRUNCATE sq.check_results, sq.latest_status, sq.job_heartbeat")
+pgutil.execute("TRUNCATE sq.check_results, sq.latest_status, sq.job_heartbeat, sq.alert_events")
 now = datetime.now(timezone.utc)
 T0 = (now - timedelta(hours=3)).replace(minute=0, second=0, microsecond=0)        # an hour boundary, inside the last 24 h
 W = timedelta(minutes=1)
@@ -46,6 +46,14 @@ for i in (0, 1, 12, 13):
 # --- last week: topic a volume, same hour, value 10 (week-over-week partner) ---
 for i in range(10):
     put("a", "", "volume", T0 - timedelta(days=7) + i * W, 10.0, "ok")
+# --- alerts: A fired +10m resolved +13m (180 s); B warning still firing; C (topic b) 120 s; D has no topic label (monitor-level) ---
+AL = "INSERT INTO sq.alert_events (status, fingerprint, alertname, severity, topic, check_type, starts_at, ends_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"
+for st, fp, name, sev, topic, ct, start, end in [
+        ("firing", "A", "DataQualityFail", "critical", "a", "volume", T0 + 10 * W, None), ("resolved", "A", "DataQualityFail", "critical", "a", "volume", T0 + 10 * W, T0 + 13 * W),
+        ("firing", "B", "DataQualityWarn", "warning", "a", "null_rate", T0 + 18 * W, None),
+        ("firing", "C", "DataQualityFail", "critical", "b", "null_rate", T0, None), ("resolved", "C", "DataQualityFail", "critical", "b", "null_rate", T0, T0 + 2 * W),
+        ("firing", "D", "QualityMonitorStalled", "critical", "", "", T0 + 20 * W, None)]:
+    cur.execute(AL, (st, fp, name, sev, topic, ct, start, end))
 cur.close()
 
 q = lambda uid, title, ref="A": pgutil.query(dashboard_sql.subst(dashboard_sql.find(uid, title, ref),
@@ -112,6 +120,16 @@ check("week-over-week: this hour avg 20 msgs/s", [(r["metric"], float(r["msgs_pe
 check("week-over-week: last week's hour (10 msgs/s) is shifted onto the SAME x position as this week's",
       [(r["metric"], float(r["msgs_per_s"])) for r in prev_rows] == [("a (7d ago)", 10.0)] and prev_rows[0]["time"] == now_rows[0]["time"], prev_rows)
 
-pgutil.execute("TRUNCATE sq.check_results, sq.latest_status, sq.job_heartbeat")
+# ---------- alert history ----------
+ah = {r["alertname"] + "/" + r["topic"]: r for r in q(AN, "Alert history")}
+check("alert history: 4 alert instances (3 topic-scoped + 1 monitor-level with empty topic)", len(ah) == 4, list(ah))
+check("alert A resolved after 180 s, C after 120 s", (ah["DataQualityFail/a"]["state"], ah["DataQualityFail/a"]["duration_s"], ah["DataQualityFail/b"]["duration_s"]) == ("resolved", 180, 120), ah)
+check("alert B and the monitor-level alert are still FIRING with a running duration", ah["DataQualityWarn/a"]["state"] == "FIRING" and ah["DataQualityWarn/a"]["duration_s"] > 9000
+      and ah["QualityMonitorStalled/"]["state"] == "FIRING", ah)
+aph = {r["metric"]: r["alerts"] for r in q(AN, "Alerts fired per hour")}
+check("alerts per hour by severity: 3 critical + 1 warning", aph == {"critical": 3, "warning": 1}, aph)
+check("alert history is also on the Violation log dashboard", len(q("sq-violations", "Alert history")) == 4)
+
+pgutil.execute("TRUNCATE sq.check_results, sq.latest_status, sq.job_heartbeat, sq.alert_events")
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

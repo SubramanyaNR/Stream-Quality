@@ -9,4 +9,3 @@ datasources:
     jsonData: { database: sq, sslmode: disable, postgresVersion: 1700, timescaledb: false, maxOpenConns: 10 }
     secureJsonData: { password: sq_reader_pw }
   - { name: Prometheus, uid: sq-prom, type: prometheus, url: "http://prometheus:9090" }
-  - { name: Loki, uid: sq-loki, type: loki, url: "http://loki:3100" }

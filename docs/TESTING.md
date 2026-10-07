@@ -12,7 +12,8 @@ and the Flink job on an embedded Flink 2.2 mini-cluster.
 | Registry outage | `make e2e-outage` | job starts with Apicurio **down**: statistical checks run, no structural rows/failures, structural resumes on recovery |
 | Analytics (23 assertions) | `make test-analytics` | seeds a deterministic history (incidents of known length, a gap that must split one incident into two, flapping, correlated failures, last week's volume) and asserts the EXACT numbers the analytics panels return. The SQL is read from the shipped dashboard JSON, so tested = shipped |
 | Dashboards (39 queries, 4 dashboards) | `make e2e` then `make test-dashboards` (strict mode needs the fault data the e2e leaves behind) | every Grafana panel/variable query executes on Postgres as the read-only user (`--strict`: non-empty) |
-| Alert path | manual (see below) | Flink gauge → Prometheus scrape → rule → Alertmanager → webhook |
+| Alert sink (21 assertions) | `make test-alert-sink` | webhook parsing, idempotent repeats, firing→resolved pairing, re-fire = new instance, 400 on bad JSON, **500 when the DB is down** (so Alertmanager retries), insert-only privileges |
+| Alert path, live (8 assertions) | `make e2e-alerts` | real job + Prometheus + Alertmanager (re-sending every 10 s) + sink + Postgres: a null spike FIRES an alert, recovery RESOLVES it, exactly one firing + one resolved row despite repeated notifications, no alerts on a healthy topic while traffic flows. Needs `PROM_HOME`, `AM_HOME`, `PROM_REPORTER_JAR` (see script header) |
 
 `make e2e` needs Kafka, PostgreSQL (database `sq`, `postgres/init/01_init.sql` applied) and optionally Apicurio running locally;
 see the header of `scripts/e2e-local.sh` for the env vars.
@@ -33,6 +34,5 @@ see the header of `scripts/e2e-local.sh` for the env vars.
 - Grafana rendering and the Postgres datasource provisioning (queries verified, JSON/provisioning schema not loaded by Grafana). The query
   tester expands `$__timeGroupAlias` with `date_bin`; real Grafana expands it to epoch arithmetic - same grouping, different output type
 - the `postgres` and `postgres-maintenance` containers, including the first-boot init and the TCP+role healthcheck (Postgres itself was verified as a real 17.5 server)
-- Loki/Alloy log shipping
 - Flink metrics via the *containerised* Prometheus plugin path (verified via classpath reporter; metric names match the rules)
 - Kafka SASL/TLS modes (property templates only; the client config is passed through verbatim)

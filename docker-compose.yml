@@ -1,5 +1,5 @@
 # Kafka and Apicurio are EXTERNAL. This stack: Flink, PostgreSQL, Prometheus,
-# Alertmanager, Grafana, Loki (+ Alloy log shipper, + tiny webhook receiver).
+# Alertmanager, Grafana (+ a tiny webhook receiver that stores alerts in Postgres).
 name: stream-quality
 
 x-flink-common: &flink-common
@@ -119,28 +119,17 @@ services:
     volumes: ["./observability/alertmanager:/etc/alertmanager:ro", "am-data:/alertmanager"]
     networks: [sq]
 
-  alert-sink:                                          # demo webhook receiver; logs payloads -> Loki
+  alert-sink:                                          # Alertmanager webhook receiver: persists every alert to sq.alert_events
     build: ./tools/alert-sink
     container_name: sq-alert-sink
     ports: ["5001:5001"]
-    networks: [sq]
-
-  loki:
-    image: grafana/loki:3.7.8
-    container_name: sq-loki
-    command: ["-config.file=/etc/loki/loki.yml"]
-    ports: ["3100:3100"]
-    volumes: ["./observability/loki/loki.yml:/etc/loki/loki.yml:ro", "loki-data:/loki"]
-    networks: [sq]
-
-  alloy:                                               # Promtail is EOL; Alloy ships container logs -> Loki
-    image: grafana/alloy:v1.20.1
-    container_name: sq-alloy
-    command: ["run", "/etc/alloy/config.alloy"]
-    volumes:
-      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on: [loki]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: sq
+      POSTGRES_USER: sq_writer
+      POSTGRES_PASSWORD: sq_writer_pw
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
     networks: [sq]
 
   grafana:
@@ -159,4 +148,4 @@ services:
     networks: [sq]
 
 networks: { sq: { name: sq } }
-volumes: { pg-data: {}, prom-data: {}, am-data: {}, loki-data: {}, grafana-data: {}, flink-checkpoints: {} }
+volumes: { pg-data: {}, prom-data: {}, am-data: {}, grafana-data: {}, flink-checkpoints: {} }

@@ -9,8 +9,8 @@ import dashboard_sql
 import pgutil
 
 STRICT = "--strict" in sys.argv
-# Legitimately empty on a fresh install / short e2e: needs structural checks (registry on) or a week of history.
-MAY_BE_EMPTY = ("structural", "7d ago", "last week")
+# Legitimately empty on a fresh install / short e2e: needs structural checks (registry on) a week of history, or an alerting stack.
+MAY_BE_EMPTY = ("structural", "7d ago", "last week", "alert_history")   # alert_history: only filled when Prometheus/Alertmanager ran
 
 bad = 0
 for d, queries in dashboard_sql.load():

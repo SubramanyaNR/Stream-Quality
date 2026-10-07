@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 DS = {"type": "grafana-postgresql-datasource", "uid": "sq-pg"}
-LOKI = {"type": "loki", "uid": "sq-loki"}
 OUT = Path(__file__).parent / "dashboards"
 TABLE, TS = "table", "time_series"
 STATUS_MAP = [{"type": "value", "options": {
@@ -169,9 +168,14 @@ p3 = [
     panel(3, "Top offenders", "table", 12, 14, 12, 7, [target(
         f"""SELECT topic, field, check_type, count(*) FILTER (WHERE status = 'fail') AS fails, count(*) FILTER (WHERE status = 'warn') AS warns
             FROM sq.violations WHERE $__timeFilter(window_end) AND {VF} GROUP BY topic, field, check_type ORDER BY fails DESC, warns DESC LIMIT 20""")]),
-    panel(4, "Alert notifications (Alertmanager webhook, via Loki)", "logs", 0, 21, 24, 8,
-          [{"refId": "A", "datasource": LOKI, "expr": '{service="alert-sink"} | json', "queryType": "range"}],
-          options={"showTime": True, "wrapLogMessage": True, "sortOrder": "Descending"}, ds=LOKI),
+    panel(4, "Alert history", "table", 0, 21, 24, 9, [target(
+        f"""SELECT fired_at AS {T}, resolved_at, alertname, severity, topic, check_type, field,
+                   CASE WHEN firing THEN 'FIRING' ELSE 'resolved' END AS state, extract(epoch FROM duration)::int AS duration_s
+            FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR {TOPIC_F}) ORDER BY fired_at DESC LIMIT 200""")],
+          "Every alert Alertmanager delivered (stored by the alert-sink in sq.alert_events). One row per alert instance: when it fired, when it resolved, how long it lasted.",
+          overrides=[{"matcher": {"id": "byName", "options": "state"}, "properties": [
+                     {"id": "mappings", "value": [{"type": "value", "options": {"FIRING": {"text": "FIRING", "color": "red", "index": 0}, "resolved": {"text": "resolved", "color": "green", "index": 1}}}]},
+                     {"id": "custom.cellOptions", "value": {"type": "color-text"}}]}, {"matcher": {"id": "byName", "options": "duration_s"}, "properties": [{"id": "unit", "value": "s"}]}]),
 ]
 d3 = dashboard("sq-violations", "Stream Quality - Violation log", p3, vars3, NAV,
                "Raw audit trail of every warn/fail with filters, plus delivered alert notifications.")
@@ -256,6 +260,18 @@ p4 = [
                    AND window_start >= $__timeFrom()::timestamptz - interval '7 days' AND window_start <= $__timeTo()::timestamptz - interval '7 days'
                  GROUP BY 1, 2 ORDER BY 1""",
              "short", "Hourly average throughput against the same hour one week earlier (dashed). Needs a week of history.", w=24),
+    panel(15, "Alert history", "table", 0, 40, 16, 9, [target(
+        f"""SELECT fired_at AS {T}, resolved_at, alertname, severity, topic, check_type, field,
+                   CASE WHEN firing THEN 'FIRING' ELSE 'resolved' END AS state, extract(epoch FROM duration)::int AS duration_s
+            FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR {TOPIC_F}) ORDER BY fired_at DESC LIMIT 200""")],
+          "Alerts delivered by Alertmanager (sq.alert_history): when each fired, when it resolved, how long it lasted.",
+          overrides=[{"matcher": {"id": "byName", "options": "state"}, "properties": [
+                     {"id": "mappings", "value": [{"type": "value", "options": {"FIRING": {"text": "FIRING", "color": "red", "index": 0}, "resolved": {"text": "resolved", "color": "green", "index": 1}}}]},
+                     {"id": "custom.cellOptions", "value": {"type": "color-text"}}]}, {"matcher": {"id": "byName", "options": "duration_s"}, "properties": [{"id": "unit", "value": "s"}]}]),
+    panel(16, "Alerts fired per hour", "timeseries", 16, 40, 8, 9, [target(
+        f"""SELECT $__timeGroupAlias(fired_at, '1h'), severity AS metric, count(*) AS alerts
+            FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR {TOPIC_F}) GROUP BY 1, 2 ORDER BY 1""", TS)],
+          defaults={"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}, "fillOpacity": 70}}),
 ]
 d4 = dashboard("sq-analytics", "Stream Quality - Quality analytics", p4, vars4, NAV,
                "Data-quality score, availability, incidents, flapping checks and week-over-week trends computed with SQL.")

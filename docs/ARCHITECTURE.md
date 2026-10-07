@@ -17,18 +17,17 @@
                                        │  Heartbeat source ─────────────────────────┐           │
                                        └────────┬───────────────────────────────────┼──────────┘
                                   gauges :9249  │             rows (JDBC upsert)▼
-                                                ▼                         ┌─────────────────┐
-              ┌────────────┐ rules ┌──────────────┐ webhook ┌──────────┐  │ PostgreSQL  sq.*│
-              │ Prometheus │──────▶│ Alertmanager │────────▶│alert-sink│  └────────┬────────┘
-              └─────┬──────┘       └──────────────┘         └────┬─────┘           │
-                    └──────────────▶  Grafana  ◀─────────────────┼─────────────────┘
-                                         ▲                       ▼
-                                         └─────────────────── Loki ◀── Alloy (container logs)
+                                                ▼                         ┌──────────────────┐
+              ┌────────────┐ rules ┌──────────────┐ webhook ┌──────────┐  │ PostgreSQL  sq.* │
+              │ Prometheus │──────▶│ Alertmanager │────────▶│alert-sink│─▶│  check_results   │
+              └─────┬──────┘       └──────────────┘         └──────────┘  │  alert_events    │
+                    │                                                     └────────┬─────────┘
+                    └──────────────────────▶  Grafana  ◀───────────────────────────┘
 ```
 
 Flows:
 1. **Data path**: Kafka → parse (bad records → DLQ topic) → windowed checks → PostgreSQL (`sq.check_results`).
-2. **Alert path**: the window operator exposes `check_status{topic,check_type,field}` gauges (0/1/2). Prometheus rules → Alertmanager → webhook. PostgreSQL is the audit trail; Prometheus owns alert timing/grouping/silencing.
+2. **Alert path**: the window operator exposes `check_status{topic,check_type,field}` gauges (0/1/2). Prometheus rules → Alertmanager → webhook → **alert-sink**, which stores every alert in `sq.alert_events` (one `firing` and one `resolved` row per alert instance; Alertmanager's repeat notifications are no-ops). `sq.alert_history` pairs them, so alert history is queried and charted with SQL next to the quality data. PostgreSQL is the audit trail; Prometheus owns alert timing/grouping/silencing. If Postgres is down the sink answers HTTP 500 and Alertmanager retries.
 3. **Registry path**: `ParseFn` validates each JSON payload against the topic's schema (`{topic}-value` artifact). Schemas are cached; refresh is async; a circuit breaker protects the hot path.
 4. **Degradation**: registry down or no schema ⇒ records are `skipped` structurally, `StructuralCheck` emits **no row** (an outage never looks like a data-quality failure), every statistical check continues. `registry_up` gauge and the heartbeat's `registry_status` expose it.
 
@@ -47,6 +46,7 @@ Flows:
 | 9 | Strictly-greater-than thresholds (`warn: 0.0` ⇒ any occurrence warns) | Makes "zero tolerance" expressible without everything warning. |
 | 10 | **PostgreSQL** results store; at-least-once delivery + **upsert on a real primary key** `(topic, check_type, field, window_start, window_end)` | Replays after a restart overwrite themselves exactly: every query sees one row per window, no `FINAL`/`argMax`. A batch must not contain the same key twice (`ON CONFLICT DO UPDATE` would error), so the sink de-duplicates per batch, last wins. |
 | 10a | Why Postgres, not ClickHouse (it was ClickHouse first) | The data is ~1 row per field per minute: far below where a columnar store pays off. Postgres is simpler to run and clone (no Grafana plugin download), gives exact idempotency, `jsonb` for `details`, a built-in Grafana datasource, and constraints/transactions. Cost: no automatic TTL (an hourly `sq.purge_old()`), no incremental materialized views (a trigger maintains `latest_status`; `violations` is a view), slower scans at very large scale. Switch point: > ~100M rows (1 s windows or thousands of fields) -> partitioning or TimescaleDB. |
+| 10c | **No log stack (Loki/Alloy removed)** | The only consumer was one dashboard panel showing webhook payloads; alert history now lives in Postgres where SQL can chart it, and Flink logs are available via `docker compose logs`. Two fewer containers, no Docker-socket mount, and the one component that could not be tested here is gone. Add Loki back if you run on Kubernetes with many pods. |
 | 10b | Analytics are SQL over the results table; incident detection is a **function** `sq.incidents(from, to)`, not a view | Window functions (gaps-and-islands) cannot have the dashboard's time filter pushed below them in a view, so a view would scan the whole table. The function filters first. An incident ends at the next ok window or a gap of > 3 window lengths, so a monitor outage never glues two incidents together. |
 | 11 | Records failing a check are analysed **and** dead-lettered (required field missing, schema violation); unparseable ones only dead-lettered | DLQ envelope keeps original key/bytes (base64) + reason. |
 | 12 | Postgres writes: custom batching sink; **one statement per batch** (rows travel as a JSON array expanded by `jsonb_to_recordset`, then upserted); flush on size, every 2 s, and on checkpoint | One round trip per batch. Bounded latency independent of checkpoint config (found when a run without checkpointing wrote nothing). Transient errors (connection, serialization, shutdown) retry on a fresh connection; bad data / permissions fail fast. |

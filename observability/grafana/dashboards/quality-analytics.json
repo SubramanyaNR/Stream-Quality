@@ -761,6 +761,129 @@
         ]
       },
       "options": {}
+    },
+    {
+      "id": 15,
+      "title": "Alert history",
+      "type": "table",
+      "description": "Alerts delivered by Alertmanager (sq.alert_history): when each fired, when it resolved, how long it lasted.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 16,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT fired_at AS \"time\", resolved_at, alertname, severity, topic, check_type, field, CASE WHEN firing THEN 'FIRING' ELSE 'resolved' END AS state, extract(epoch FROM duration)::int AS duration_s FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR topic IN (${topic:singlequote})) ORDER BY fired_at DESC LIMIT 200"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "state"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "FIRING": {
+                        "text": "FIRING",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "resolved": {
+                        "text": "resolved",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "duration_s"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {}
+    },
+    {
+      "id": 16,
+      "title": "Alerts fired per hour",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "sq-pg"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 40,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sq-pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(fired_at, '1h'), severity AS metric, count(*) AS alerts FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR topic IN (${topic:singlequote})) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 70
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
     }
   ],
   "annotations": {
