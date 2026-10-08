@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assertions for scripts/e2e-local.sh. Usage: e2e_assert.py <bootstrap> <dlq_topic> <since_epoch_s> [registry_on:true|false]"""
+"""Assertions for scripts/e2e-local.sh. Usage: e2e_assert.py <bootstrap> <dlq_topic> <since_epoch_s> [registry_on:true|false] [serialization]"""
 import base64
 import json
 import sys
@@ -8,6 +8,7 @@ import pgutil
 
 bootstrap, dlq, since = sys.argv[1:4]
 REGISTRY = len(sys.argv) > 4 and sys.argv[4] == "true"
+AVRO = len(sys.argv) > 5 and sys.argv[5] == "confluent-avro"     # Avro cannot carry a wrong-typed value: no structural violations possible
 fails = []
 
 
@@ -43,8 +44,11 @@ check("volume orders: silence -> FAIL value 0 (empty windows are emitted)", any(
 p_vol = rows("topic='payments' AND check_type='volume'")
 steady = [r for r in p_vol if 5 < r["value"] < 15]
 check("volume payments: steady ~10/s", len(steady) >= 6, [round(r["value"], 1) for r in p_vol])
+# The generator stops mid-window, so the LAST window with traffic is a partial one (e.g. 6 msg/s instead of 10) that is
+# rightly flagged just before the silence. Judge only windows that are followed by another window with traffic.
+flowing = [r for i, r in enumerate(p_vol) if i + 1 < len(p_vol) and p_vol[i + 1]["value"] > 0]
 check("payments never failed once flowing (isolation between topics)",
-      not any(r["status"] != "ok" and r["value"] > 5 for r in p_vol), [(r["status"], round(r["value"], 1)) for r in p_vol])
+      not any(r["status"] != "ok" and r["value"] > 5 for r in flowing), [(r["status"], round(r["value"], 1)) for r in p_vol])
 
 o_card = rows("topic='orders' AND check_type='cardinality' AND field='customer_id'")
 check("cardinality customer_id: baseline ~15 distinct, ok", any(r["status"] == "ok" and 10 <= r["value"] <= 20 for r in o_card), [(r["status"], round(r["value"])) for r in o_card])
@@ -58,9 +62,12 @@ check("freshness payments: always ok", p_fr and all(r["status"] == "ok" for r in
 
 if REGISTRY:
     o_st = rows("topic='orders' AND check_type='structural'")
-    check("structural orders: valid traffic ok", any(r["status"] == "ok" and r["value"] == 0 for r in o_st), [(r["status"], round(r["value"], 3)) for r in o_st])
-    check("structural orders: 30% wrong-typed amount -> FAIL naming the field",
-          any(r["status"] == "fail" and "amount" in r["details"] and r["value"] > 0.15 for r in o_st), [(r["status"], round(r["value"], 3)) for r in o_st])
+    check("structural orders: valid traffic ok (rows exist and some are clean)", any(r["status"] == "ok" and r["value"] == 0 for r in o_st), [(r["status"], round(r["value"], 3)) for r in o_st])
+    if AVRO:
+        check("structural orders (Avro): every decoded record is valid by construction -> never a violation", o_st and all(r["status"] == "ok" for r in o_st), [(r["status"], round(r["value"], 3)) for r in o_st])
+    else:
+        check("structural orders: 30% wrong-typed amount -> FAIL naming the field",
+              any(r["status"] == "fail" and "amount" in r["details"] and r["value"] > 0.15 for r in o_st), [(r["status"], round(r["value"], 3)) for r in o_st])
     p_st = rows("topic='payments' AND check_type='structural'")
     check("structural payments: always ok (schema-valid traffic)", p_st and all(r["status"] == "ok" for r in p_st), [(r["status"], round(r["value"], 3)) for r in p_st])
     check("heartbeat reports registry up", q("SELECT count(*) AS c FROM sq.job_heartbeat WHERE registry_status = 'up'")[0]["c"] >= 1)
@@ -89,8 +96,11 @@ for m in c:
 check("DLQ: corrupt JSON dead-lettered", reasons.get("invalid_json", 0) > 5, reasons)
 check("DLQ: original bytes preserved (base64 roundtrip)", good_roundtrip)
 check("DLQ: null required field dead-lettered", reasons.get("required_field_missing", 0) > 0, reasons)
-if REGISTRY:
+if REGISTRY and not AVRO:
     check("DLQ: schema violations dead-lettered", reasons.get("schema_violation", 0) > 5, reasons)
+if AVRO:
+    check("DLQ (Avro): ONLY the intentionally corrupt/required-null records were dead-lettered, no decode failures or unknown ids",
+          not any(r in reasons for r in ("avro_decode_failed", "unknown_schema_id", "unsupported_format")), reasons)
 
 print(f"\n{'ALL PASSED' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

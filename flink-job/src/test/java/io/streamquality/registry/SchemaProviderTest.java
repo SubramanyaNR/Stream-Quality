@@ -27,10 +27,10 @@ class SchemaProviderTest {
     /** Scriptable fake registry. */
     static class Fake implements RegistryClient {
         volatile boolean down; volatile boolean none; final AtomicInteger calls = new AtomicInteger();
-        public Optional<String> fetchLatestSchema(String id) throws IOException {
+        public Optional<RegisteredSchema> fetchLatest(String id) throws IOException {
             calls.incrementAndGet();
             if (down) throw new IOException("connection refused");
-            return none ? Optional.empty() : Optional.of(SCHEMA);
+            return none ? Optional.empty() : Optional.of(new RegisteredSchema(RegisteredSchema.JSON, SCHEMA));
         }
         public boolean ping() { return !down; }
     }

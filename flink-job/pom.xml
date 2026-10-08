@@ -18,6 +18,7 @@
         <flink.version>2.2.1</flink.version>
         <flink.kafka.connector.version>5.0.0-2.2</flink.kafka.connector.version>
 
+        <avro.version>1.12.1</avro.version>
         <postgresql.version>42.7.12</postgresql.version>
         <jackson.version>2.18.2</jackson.version>
         <datasketches.version>6.2.0</datasketches.version>
@@ -75,6 +76,13 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>${postgresql.version}</version>
+        </dependency>
+
+        <!-- ===== Avro: decode Confluent-wire-format Avro payloads (schema fetched by id from the registry) ===== -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
         </dependency>
 
         <!-- ===== Payload parsing + config ===== -->

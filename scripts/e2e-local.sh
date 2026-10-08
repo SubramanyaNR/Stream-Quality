@@ -4,7 +4,11 @@
 #   Kafka   at $E2E_BOOTSTRAP     (default 127.0.0.1:19092), topics auto-created here
 #   Postgres at $E2E_PG_HOST:$E2E_PG_PORT (default 127.0.0.1:5432), database sq, with postgres/init/01_init.sql applied
 #     (admin user via E2E_PG_ADMIN / E2E_PG_ADMIN_PASSWORD, default postgres/none)
-#   Apicurio (optional) at $E2E_REGISTRY_URL (default http://127.0.0.1:18081/apis/registry/v3): enables structural checks
+#   A schema registry (optional) - enables structural checks:
+#     E2E_REGISTRY_TYPE=apicurio (default) | confluent | karapace | redpanda | ccompat
+#     E2E_REGISTRY_URL  default http://127.0.0.1:18081/apis/registry/v3 (apicurio) | http://127.0.0.1:18082 (others)
+#   E2E_SERIALIZATION=json (default) | confluent-json | confluent-avro   (the last two use the Confluent wire format and need a
+#   Confluent-API registry type; Avro cannot express a wrong-typed value, so the structural-FAIL assertions are skipped for it)
 # Needs: $KAFKA_HOME (for kafka-topics.sh), maven, java, python3 with kafka-python, PyYAML, psycopg2.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -26,11 +30,14 @@ python3 scripts/pg_sql.py "TRUNCATE sq.check_results, sq.latest_status, sq.job_h
 
 sed -e "s#^bootstrap.servers=.*#bootstrap.servers=$BOOT#" -e "s#^sq.dlq.topic=.*#sq.dlq.topic=$DLQ#" \
     -e "s#^sq.source.topics=.*#sq.source.topics=orders,payments#" config/kafka.properties > "$WORK/config/kafka.properties"
-REG=${E2E_REGISTRY_URL:-http://127.0.0.1:18081/apis/registry/v3}; REG_ON=false
-if curl -sf -m 3 "$REG/system/info" >/dev/null; then
-  REG_ON=true; python3 scripts/register_schemas.py --url "$REG" >/dev/null
+RTYPE=${E2E_REGISTRY_TYPE:-apicurio}; SER=${E2E_SERIALIZATION:-json}; REG_ON=false
+if [ "$RTYPE" = apicurio ]; then REG=${E2E_REGISTRY_URL:-http://127.0.0.1:18081/apis/registry/v3}; PING="$REG/system/info"
+else REG=${E2E_REGISTRY_URL:-http://127.0.0.1:18082}; PING="$REG/config"; fi
+if curl -sf -m 3 "$PING" >/dev/null; then
+  REG_ON=true; python3 scripts/register_schemas.py --type "$RTYPE" --url "$REG" >/dev/null
 else echo "registry not reachable at $REG -> structural checks disabled for this run"; fi
-sed -e "s#^sq.registry.enabled=.*#sq.registry.enabled=$REG_ON#" -e "s#^sq.registry.url=.*#sq.registry.url=$REG#" config/registry.properties > "$WORK/config/registry.properties"
+if [ "$SER" != json ] && [ "$REG_ON" != true ]; then echo "E2E_SERIALIZATION=$SER needs a reachable Confluent-API registry"; exit 2; fi
+sed -e "s#^sq.registry.enabled=.*#sq.registry.enabled=$REG_ON#" -e "s#^sq.registry.url=.*#sq.registry.url=$REG#" -e "s#^sq.registry.type=.*#sq.registry.type=$RTYPE#" config/registry.properties > "$WORK/config/registry.properties"
 sed -e 's/size: 60s/size: 5s/' -e 's/max_out_of_orderness: 5s/max_out_of_orderness: 2s/' \
     -e 's/min_history: 5/min_history: 3/' config/thresholds.yaml > "$WORK/config/thresholds.yaml"
 
@@ -44,6 +51,7 @@ for _ in $(seq 1 60); do grep -q "Assigned to partition" "$WORK/job.log" && brea
 grep -q "Assigned to partition" "$WORK/job.log" || { echo "job did not start"; tail -30 "$WORK/job.log"; exit 1; }
 
 SINCE=$(date +%s)
-python3 generator/generate.py --config "$WORK/config/kafka.properties" --scenario generator/scenarios/e2e.yaml
+python3 generator/generate.py --config "$WORK/config/kafka.properties" --scenario generator/scenarios/e2e.yaml \
+  --serialization "$SER" ${REG_ON:+--registry-url "$REG"}
 echo "waiting for last windows to close..."; sleep 14
-python3 scripts/e2e_assert.py "$BOOT" "$DLQ" "$SINCE" "$REG_ON"
+python3 scripts/e2e_assert.py "$BOOT" "$DLQ" "$SINCE" "$REG_ON" "$SER"

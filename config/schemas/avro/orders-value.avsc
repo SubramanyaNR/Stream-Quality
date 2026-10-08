@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "Order",
+  "namespace": "io.streamquality.example",
+  "fields": [
+    {"name": "order_id",    "type": ["null", "string"], "default": null},
+    {"name": "customer_id", "type": ["null", "string"], "default": null},
+    {"name": "amount",      "type": "double"},
+    {"name": "ts",          "type": "long"}
+  ]
+}

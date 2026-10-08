@@ -1,0 +1,10 @@
+{
+  "type": "record",
+  "name": "Payment",
+  "namespace": "io.streamquality.example",
+  "fields": [
+    {"name": "payment_id", "type": "string"},
+    {"name": "amount",     "type": "double"},
+    {"name": "ts",         "type": "long"}
+  ]
+}

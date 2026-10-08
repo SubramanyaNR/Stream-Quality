@@ -25,6 +25,7 @@ public final class NullRateCheck implements QualityCheck<NullRateCheck.Acc> {
 
     @Override
     public Acc add(ParsedRecord r, Acc a) {
+        if (r.undecoded()) return a;                    // unreadable record: its fields are unknown, not null
         a.total++;
         for (String f : r.fields().keySet()) a.present.merge(f, 1L, Long::sum);
         return a;

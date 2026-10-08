@@ -22,12 +22,12 @@ public final class ApicurioV3Client implements RegistryClient {
     }
 
     @Override
-    public Optional<String> fetchLatestSchema(String artifactId) throws IOException {
+    public Optional<RegisteredSchema> fetchLatest(String artifactId) throws IOException {
         String path = "/groups/" + enc(cfg.group()) + "/artifacts/" + enc(artifactId) + "/versions/branch=latest/content";
         HttpResponse<String> r = get(path);
         if (r.statusCode() == 404) return Optional.empty();
         if (r.statusCode() != 200) throw new IOException("Registry HTTP " + r.statusCode() + " for " + artifactId);
-        return Optional.of(r.body());
+        return Optional.of(new RegisteredSchema(RegisteredSchema.JSON, r.body()));
     }
 
     @Override

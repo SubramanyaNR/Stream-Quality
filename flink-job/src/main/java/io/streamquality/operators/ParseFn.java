@@ -6,7 +6,8 @@ import io.streamquality.config.Thresholds;
 import io.streamquality.dlq.DlqRecord;
 import io.streamquality.model.ParsedRecord;
 import io.streamquality.model.RawRecord;
-import io.streamquality.registry.ApicurioV3Client;
+import io.streamquality.decode.PayloadDecoder;
+import io.streamquality.registry.RegistryClients;
 import io.streamquality.registry.RegistryConfig;
 import io.streamquality.registry.SchemaProvider;
 import java.nio.charset.StandardCharsets;
@@ -35,11 +36,18 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
 
     private final Thresholds thresholds;
     private final RegistryConfig registryCfg;
+    private final boolean framing;
     private transient ObjectMapper mapper;
     private transient SchemaProvider schemas;
+    private transient PayloadDecoder decoder;
     private transient AtomicInteger registryUp;
 
-    public ParseFn(Thresholds thresholds, RegistryConfig registryCfg) { this.thresholds = thresholds; this.registryCfg = registryCfg; }
+    public ParseFn(Thresholds thresholds, RegistryConfig registryCfg) { this(thresholds, registryCfg, true); }
+
+    /** framing: recognise the Confluent wire format (sq.source.framing=auto). Needs a registry that supports lookup by id. */
+    public ParseFn(Thresholds thresholds, RegistryConfig registryCfg, boolean framing) {
+        this.thresholds = thresholds; this.registryCfg = registryCfg; this.framing = framing;
+    }
 
     @Override
     public void open(OpenContext ctx) {
@@ -47,10 +55,9 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
         registryUp = new AtomicInteger(registryCfg != null && registryCfg.enabled() ? 1 : 0);
         getRuntimeContext().getMetricGroup().gauge("registry_up", (Gauge<Integer>) registryUp::get);
         if (registryCfg != null && registryCfg.enabled()) {
-            if (!"apicurio".equalsIgnoreCase(registryCfg.type()))
-                throw new IllegalStateException("Unsupported sq.registry.type '" + registryCfg.type() + "' (supported: apicurio)");
-            schemas = new SchemaProvider(registryCfg, new ApicurioV3Client(registryCfg), System::currentTimeMillis);
+            schemas = new SchemaProvider(registryCfg, RegistryClients.create(registryCfg), System::currentTimeMillis);
         }
+        decoder = new PayloadDecoder(mapper, schemas, framing);
     }
 
     @Override
@@ -60,9 +67,15 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
     public void processElement(RawRecord r, Context ctx, Collector<ParsedRecord> out) {
         long now = System.currentTimeMillis();
         if (r.value() == null) { dlq(ctx, r, DlqRecord.NULL_PAYLOAD, "tombstone / null value"); return; }
-        JsonNode root;
-        try { root = mapper.readTree(r.value()); }
-        catch (Exception e) { dlq(ctx, r, DlqRecord.INVALID_JSON, trunc(e.getMessage())); return; }
+        PayloadDecoder.Decoded d = decoder.decode(r.value());
+        if (d.failReason() != null) { dlq(ctx, r, d.failReason(), trunc(d.failDetail())); return; }
+        if (d.undecoded()) {          // readable only with the registry (e.g. Avro while it is down): count it for volume, skip field checks
+            out.collect(new ParsedRecord(r.topic(), r.partition(), r.offset(), r.timestampMs(), false, now, false, Map.of(),
+                    ParsedRecord.STRUCT_SKIPPED, null, true));
+            registryUp.set(schemas != null && schemas.isUp() ? 1 : 0);
+            return;
+        }
+        JsonNode root = d.json();
         if (root == null || !root.isObject()) { dlq(ctx, r, DlqRecord.NOT_AN_OBJECT, "payload is not a JSON object"); return; }
 
         long eventTime = r.timestampMs();
@@ -93,13 +106,16 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
         }
         byte structural = ParsedRecord.STRUCT_SKIPPED;
         String structuralError = null;
-        if (schemas != null) {
-            SchemaProvider.Result v = schemas.validate(r.topic(), root);
+        if (d.isAvro()) {
+            structural = ParsedRecord.STRUCT_VALID;       // it decoded with the registered writer schema: structurally sound by construction
+        } else if (schemas != null) {
+            SchemaProvider.Result v = d.schema() != null ? schemas.validateWithSchema(d.schemaId(), d.schema(), root)   // framed JSON: the exact writer schema
+                                                         : schemas.validate(r.topic(), root);                           // plain JSON: latest schema of the topic's subject
             registryUp.set(schemas.isUp() ? 1 : 0);
             if (v.state() == SchemaProvider.State.VALID) structural = ParsedRecord.STRUCT_VALID;
             else if (v.state() == SchemaProvider.State.INVALID) { structural = ParsedRecord.STRUCT_INVALID; structuralError = trunc(v.error()); }
         }
-        out.collect(new ParsedRecord(r.topic(), r.partition(), r.offset(), eventTime, fromPayload, now, false, fields, structural, structuralError));
+        out.collect(new ParsedRecord(r.topic(), r.partition(), r.offset(), eventTime, fromPayload, now, false, fields, structural, structuralError, false));
         if (structural == ParsedRecord.STRUCT_INVALID) dlq(ctx, r, DlqRecord.SCHEMA_VIOLATION, structuralError);
         if (missingRequired != null) dlq(ctx, r, DlqRecord.REQUIRED_FIELD_MISSING, missingRequired.toString());
     }

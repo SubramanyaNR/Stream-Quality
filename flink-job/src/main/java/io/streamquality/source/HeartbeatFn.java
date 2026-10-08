@@ -3,7 +3,7 @@ package io.streamquality.source;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.streamquality.sink.DbRow;
-import io.streamquality.registry.ApicurioV3Client;
+import io.streamquality.registry.RegistryClients;
 import io.streamquality.registry.RegistryClient;
 import io.streamquality.registry.RegistryConfig;
 import java.time.Instant;
@@ -49,7 +49,7 @@ public final class HeartbeatFn extends RichMapFunction<Long, DbRow> {
         p.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "5000");
         p.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "8000");
         admin = AdminClient.create(p);
-        if (registryCfg != null && registryCfg.enabled()) registry = new ApicurioV3Client(registryCfg);
+        if (registryCfg != null && registryCfg.enabled()) registry = RegistryClients.create(registryCfg);
     }
 
     @Override

@@ -125,7 +125,7 @@ public final class StreamQualityJob {
                 .build();
         SingleOutputStreamOperator<ParsedRecord> parsed = env
                 .fromSource(source, WatermarkStrategy.noWatermarks(), "kafka-source")
-                .process(new ParseFn(th, registryCfg)).name("parse");
+                .process(new ParseFn(th, registryCfg, !"none".equalsIgnoreCase(kafkaAll.getProperty("sq.source.framing", "auto")))).name("parse");
 
         KafkaSink<DlqRecord> dlqSink = KafkaSink.<DlqRecord>builder()
                 .setKafkaProducerConfig(kafkaClient)
