@@ -1,4 +1,0 @@
-kafka-python>=2.0.2
-PyYAML>=6.0
-zstandard>=0.22
-fastavro>=1.9

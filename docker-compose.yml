@@ -6,11 +6,11 @@ x-flink-common: &flink-common
   build: { context: ., dockerfile: flink/Dockerfile }
   image: stream-quality/flink:2.2.1
   extra_hosts: ["host.docker.internal:host-gateway"]   # reach Kafka/Apicurio on the Docker host (Linux needs this)
-  env_file: [.env]
+  env_file: [cluster.env]
   volumes:
     - ./config:/opt/sq/config:ro                       # kafka.properties, registry.properties, thresholds.yaml
     - flink-checkpoints:/opt/flink/checkpoints
-  networks: [sq]
+  networks: [sq, kafka]
 
 services:
   postgres:
@@ -53,6 +53,8 @@ services:
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
+        rest.address: flink-jobmanager
+        rest.bind-address: 0.0.0.0
         state.backend.type: rocksdb
         state.backend.incremental: true
         state.checkpoints.dir: file:///opt/flink/checkpoints
@@ -78,7 +80,7 @@ services:
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: 4
         taskmanager.memory.process.size: 2g
-        taskmanager.memory.managed.fraction: 0.4       # RocksDB lives in managed memory
+        taskmanager.memory.managed.fraction: 0.4
         state.backend.type: rocksdb
         state.backend.incremental: true
         metrics.reporters: prom
@@ -147,5 +149,7 @@ services:
     depends_on: { postgres: { condition: service_healthy } }
     networks: [sq]
 
-networks: { sq: { name: sq } }
+networks:
+  sq: { name: sq }
+  kafka: { name: "${KAFKA_DOCKER_NETWORK:?set KAFKA_DOCKER_NETWORK in cluster.env (run via make)}", external: true }   # the Kafka cluster's network
 volumes: { pg-data: {}, prom-data: {}, am-data: {}, grafana-data: {}, flink-checkpoints: {} }

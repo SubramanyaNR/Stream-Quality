@@ -5,7 +5,7 @@ window:
   size: 60s                  # tumbling windows over INGESTION time (when Flink parsed the record)
   max_out_of_orderness: 5s   # parallel-subtask skew tolerance; later records are dropped + counted (late_records metric)
   idle_timeout: 30s
-event_time_field: ts         # JSON path to the payload timestamp (epoch s/ms or ISO-8601): used ONLY for freshness; falls back to Kafka timestamp
+event_time_field: event_time         # JSON path to the payload timestamp (epoch s/ms or ISO-8601): used ONLY for freshness; falls back to Kafka timestamp
 history_windows: 30          # per-(check,field) lookback for baseline-relative checks (volume drop, cardinality drift)
 rebaseline_after: 30         # only OK windows feed the baseline; a violation lasting longer than this many windows becomes the new normal
 
@@ -17,10 +17,14 @@ defaults:
   freshness:   { warn_p95_ms: 30000, fail_p95_ms: 120000 }
 
 topics:
-  orders:
+  bank.dbo.transactions:
     fields:
-      order_id:    { required: true, null_rate: { warn: 0.0, fail: 0.01 } }
+      txn_id:      { required: true, null_rate: { warn: 0.0, fail: 0.01 } }
+      account_id:  { required: true }
       customer_id: { cardinality: true }
-  payments:
+  bank.app.clickstream:
     fields:
-      payment_id:  { required: true }
+      event_id:    { required: true }
+  bank.app.application_logs:
+    fields:
+      log_id:      { required: true }

@@ -23,12 +23,39 @@ ap.add_argument("--type")
 ap.add_argument("--no-avro", action="store_true", help="register JSON Schemas only")
 a = ap.parse_args()
 
+import os
+import re
+
+# Values may use ${env:NAME} / ${env:NAME:-default}. NAME comes from the process environment, else from cluster.env
+# (the same file `make up` uses), so `make schemas` talks to the registry the job is configured for.
+env = {}
+for envfile in ("cluster.env", "cluster.env.example"):
+    if Path(envfile).exists():
+        for line in Path(envfile).read_text().splitlines():
+            if line.strip() and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v
+        break
+env.update(os.environ)
+
+
+def resolve(v):
+    def sub(m):
+        val = env.get(m.group(1))
+        if val is None:
+            val = m.group(2)
+        if val is None:
+            sys.exit(f"env var {m.group(1)} is not set (referenced in {a.config}); set it in cluster.env")
+        return val
+    return re.sub(r"\$\{env:(\w+)(?::-([^}]*))?\}", sub, v)
+
+
 props = {}
 for line in Path(a.config).read_text().splitlines():
     line = line.strip()
     if line and not line.startswith("#") and "=" in line:
         k, v = line.split("=", 1)
-        props[k.strip()] = v.strip()
+        props[k.strip()] = resolve(v.strip())
 rtype = (a.type or props.get("sq.registry.type", "apicurio")).lower()
 url = (a.url or props["sq.registry.url"]).replace("host.docker.internal", "localhost").rstrip("/")
 group = props.get("sq.registry.group", "default")

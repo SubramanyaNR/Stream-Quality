@@ -17,6 +17,7 @@ import io.streamquality.operators.LateCounterFn;
 import io.streamquality.operators.ParseFn;
 import io.streamquality.registry.RegistryConfig;
 import io.streamquality.source.KafkaPreflight;
+import io.streamquality.source.TopicSelector;
 import io.streamquality.source.RawRecordDeserializer;
 import io.streamquality.source.TickFn;
 import java.time.Duration;
@@ -25,6 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.apache.flink.connector.base.DeliveryGuarantee;
 import org.apache.flink.connector.kafka.source.KafkaSource;
+import org.apache.flink.connector.kafka.source.KafkaSourceBuilder;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -98,9 +100,10 @@ public final class StreamQualityJob {
         List<String> sourceTopics = topicsProp.isBlank() ? monitored
                 : Arrays.stream(topicsProp.split(",")).map(String::trim).filter(x -> !x.isEmpty()).toList();
         String dlqTopic = kafkaAll.getProperty("sq.dlq.topic", "sq.dead-letter");
+        String topicPattern = kafkaAll.getProperty("sq.source.topic.pattern", "").trim();
         boolean failOnMissing = Boolean.parseBoolean(kafkaAll.getProperty("sq.dlq.fail.on.missing", "true"));
         if (!params.getBoolean("skip-preflight", false)) {
-            List<String> must = new ArrayList<>(sourceTopics);
+            List<String> must = new ArrayList<>(topicPattern.isEmpty() ? sourceTopics : List.of());
             if (failOnMissing) must.add(dlqTopic);
             KafkaPreflight.verifyTopicsExist(kafkaClient, must);
         }
@@ -117,9 +120,11 @@ public final class StreamQualityJob {
         // ---- Kafka source -> parse (+ DLQ side output) ----
         OffsetsInitializer start = "earliest".equalsIgnoreCase(kafkaAll.getProperty("auto.offset.reset", "latest"))
                 ? OffsetsInitializer.earliest() : OffsetsInitializer.latest();
-        KafkaSource<RawRecord> source = KafkaSource.<RawRecord>builder()
-                .setProperties(kafkaClient)
-                .setTopics(sourceTopics)
+        KafkaSourceBuilder<RawRecord> sourceBuilder = KafkaSource.<RawRecord>builder().setProperties(kafkaClient);
+        if (topicPattern.isEmpty()) sourceBuilder.setTopics(sourceTopics);
+        else sourceBuilder.setTopicPattern(TopicSelector.pattern(topicPattern,
+                kafkaAll.getProperty("sq.source.topic.exclude", ""), dlqTopic));
+        KafkaSource<RawRecord> source = sourceBuilder
                 .setStartingOffsets(start)
                 .setDeserializer(new RawRecordDeserializer())
                 .build();
