@@ -8,15 +8,12 @@ and the Flink job on an embedded Flink 2.2 mini-cluster.
 |---|---|---|
 | Unit (40 tests) + Postgres sink (9) | `make test` (set `SQ_TEST_PG_URL` to include the 9 sink tests; they are skipped otherwise) | parsing/DLQ routing, every check's maths and status rules, sketch merge, thresholds precedence, sink upsert/batching/retry/timer against a real Postgres, schema cache + circuit breaker |
 | Schema (11 assertions) | `make test-schema` | PK upsert idempotency, trigger keeps the newest window, enum ordering, jsonb validation, read-only/writer privileges, retention |
-| End to end (29 assertions) | `make e2e` | Kafka → job → PostgreSQL with scripted faults: null spike, id explosion, 150 s-stale events, schema break, −90 % volume, silence, corrupt JSON; DLQ contents; MVs; heartbeat |
-| Registry outage | `make e2e-outage` | job starts with Apicurio **down**: statistical checks run, no structural rows/failures, structural resumes on recovery |
 | Analytics (23 assertions) | `make test-analytics` | seeds a deterministic history (incidents of known length, a gap that must split one incident into two, flapping, correlated failures, last week's volume) and asserts the EXACT numbers the analytics panels return. The SQL is read from the shipped dashboard JSON, so tested = shipped |
-| Dashboards (39 queries, 4 dashboards) | `make e2e` then `make test-dashboards` (strict mode needs the fault data the e2e leaves behind) | every Grafana panel/variable query executes on Postgres as the read-only user (`--strict`: non-empty) |
+| Dashboards (39 queries, 4 dashboards) | `make test-dashboards` (`--strict` needs data: run bankgen in anomaly mode first) | every Grafana panel/variable query executes on Postgres as the read-only user (`--strict`: non-empty) |
 | Alert sink (21 assertions) | `make test-alert-sink` | webhook parsing, idempotent repeats, firing→resolved pairing, re-fire = new instance, 400 on bad JSON, **500 when the DB is down** (so Alertmanager retries), insert-only privileges |
-| Alert path, live (8 assertions) | `make e2e-alerts` | real job + Prometheus + Alertmanager (re-sending every 10 s) + sink + Postgres: a null spike FIRES an alert, recovery RESOLVES it, exactly one firing + one resolved row despite repeated notifications, no alerts on a healthy topic while traffic flows. Needs `PROM_HOME`, `AM_HOME`, `PROM_REPORTER_JAR` (see script header) |
 
-`make e2e` needs Kafka, PostgreSQL (database `sq`, `postgres/init/01_init.sql` applied) and optionally Apicurio running locally;
-see the header of `scripts/e2e-local.sh` for the env vars.
+The old end-to-end scripts (`make e2e`, `e2e-outage`, `e2e-alerts`) were removed on 2026-10-08 with the generator.
+End-to-end checking is now manual: run bankgen with `DATA_MODE=anomaly` (see the README) and watch Grafana and `sq.check_results`.
 
 ## Bugs that only real components exposed (all fixed)
 - window by payload time dropped stale events (switched to ingestion time)

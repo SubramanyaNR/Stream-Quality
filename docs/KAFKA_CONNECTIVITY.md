@@ -1,6 +1,6 @@
 # Connecting to your existing Kafka cluster
 
-The monitor only needs `config/kafka.properties`. The most common failure is **networking, not config**.
+The monitor is configured from `cluster.env` (read by `config/kafka.properties`). Run `make check` to test it. The most common failure is **networking, not config**.
 
 ## The advertised-listener rule
 A Kafka client connects to `bootstrap.servers`, receives the cluster metadata, then reconnects to each broker's
@@ -10,7 +10,7 @@ A Kafka client connects to `bootstrap.servers`, receives the cluster metadata, t
 |---|---|---|
 | Docker host (Linux/Mac/Win) | `host.docker.internal:9092` | `host.docker.internal:9092` (a *second* listener is fine) |
 | Another machine / VM | `kafka.example.com:9092` | `kafka.example.com:9092` |
-| Same Docker network | `kafka:9092` + attach the `sq` network externally | `kafka:9092` |
+| Same Docker host, own network | `kafka:29092`; set `KAFKA_DOCKER_NETWORK=<that network>` and the Flink containers join it | the name on that network |
 
 `localhost:9092` advertised ⇒ the client connects, fetches metadata, then tries `localhost` *inside the container*
 and fails. Add a listener rather than changing the existing one:
