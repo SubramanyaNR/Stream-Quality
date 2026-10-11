@@ -1,0 +1,1 @@
+{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","required":["log_id"],"properties":{"log_id":{"type":"string","minLength":1},"customer_id":{"type":["string","null"]},"is_crash":{"type":"boolean"},"event_time":{"type":"string"}}}

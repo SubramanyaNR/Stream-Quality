@@ -1,0 +1,1 @@
+{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","required":["event_id"],"properties":{"event_id":{"type":"string","minLength":1},"customer_id":{"type":["string","null"]},"funnel_step":{"type":"integer"},"event_time":{"type":"string"}}}

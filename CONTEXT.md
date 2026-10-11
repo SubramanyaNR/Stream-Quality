@@ -22,7 +22,18 @@ make up-data                 # clean bank traffic
 make up-data DATA_MODE=anomaly   # cycles null spike, corrupt JSON, type break, volume drop, silence (ANOMALY_PHASE_SEC, default 90)
 ```
 Monitored: `TOPICS_PATTERN` matches `bank.dbo.transactions`, `bank.app.clickstream`, `bank.app.application_logs`; their required fields
-and `event_time_field: event_time` are in `config/thresholds.yaml`. This combination has not been run end to end yet.
+and `event_time_field: event_time` are in `config/thresholds.yaml`. Run end to end on 2026-10-11, see below.
+
+## Run end to end (2026-10-11)
+kafka-sandbox (`make up-data DATA_MODE=anomaly`) feeding the three monitored topics, job RUNNING, 90 s per fault phase:
+- `null_spike`: null_rate fail on `bank.dbo.transactions`, warn on clickstream; alerts fired and resolved.
+- `bad_payloads`: dead-letter records `invalid_json` and `required_field_missing`.
+- `volume_drop`: volume warn (~40%, the window mixed clean and dropped traffic). `volume_zero`: volume fail, count 0, on all three topics; alerts fired and resolved.
+- `type_break` (non-null wrong type, ~20% of records): **not detected with the registry off.** With Karapace (`ks-schema-registry`,
+  sandbox profile `ui`) and `make schemas` (registers `config/schemas/bank.*-value.json`), set `REGISTRY_ENABLED=true`, `REGISTRY_TYPE=karapace`,
+  `REGISTRY_URL=http://ks-schema-registry:8081`: `structural` check fails on all three topics (e.g. `$.amount: string found, number expected`, 741 of 3731).
+- `make test-dashboards` needs `psycopg2` on the host; not run.
+- Direct `docker compose` calls need `COMPOSE_ENV_FILES=cluster.env`.
 
 ## Tested earlier (2026-10-07), standalone single-broker, with the since-removed generator
 Standalone `kafka` container on `kafka-net` (`KAFKA_BOOTSTRAP=kafka:29092`, host `localhost:9092`, RF 1).
