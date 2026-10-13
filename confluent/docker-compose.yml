@@ -1,0 +1,190 @@
+# Confluent Platform 8.3 - single-node KRaft cluster + Control Center (Next Gen)
+# Usage:  docker compose up -d      UI: http://localhost:9021
+name: cp-83
+
+x-cp-version: &cp-version 8.3.2
+x-cluster-id: &cluster-id "MkU3OEVBNTcwNTJENDM2Qk"   # any base64 UUID (22 chars)
+
+services:
+  # ---- KRaft controller (dedicated) ----
+  controller:
+    image: confluentinc/cp-server:8.3.2
+    hostname: controller
+    container_name: controller
+    environment:
+      CLUSTER_ID: *cluster-id
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: controller
+      KAFKA_LISTENERS: CONTROLLER://controller:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@controller:9093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_JMX_PORT: 9997
+      KAFKA_JMX_HOSTNAME: controller
+      KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+    volumes:
+      - controller-data:/var/lib/kafka/data
+
+  # ---- Kafka broker ----
+  broker:
+    image: confluentinc/cp-server:8.3.2
+    hostname: broker
+    container_name: broker
+    depends_on:
+      - controller
+    ports:
+      - "9092:9092"      # host access
+      - "9101:9101"      # JMX
+    environment:
+      CLUSTER_ID: *cluster-id
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: broker
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@controller:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: INTERNAL://broker:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://broker:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      # single-broker replication settings
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_METADATA_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_CLUSTER_LINK_METADATA_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+      # metrics -> Prometheus (needed by Control Center Next Gen)
+      KAFKA_METRIC_REPORTERS: io.confluent.telemetry.reporter.TelemetryReporter
+      KAFKA_CONFLUENT_TELEMETRY_ENABLED: "true"
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_TYPE: http
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_ENABLED: "true"
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_METRICS_INCLUDE: "io.confluent.kafka.server.request.(?!.*delta).*|io.confluent.kafka.server.server.broker.state|io.confluent.kafka.server.replica.manager.leader.count|io.confluent.kafka.server.request.queue.size|io.confluent.kafka.server.broker.topic.failed.produce.requests.rate.1.min|io.confluent.kafka.server.tier.archiver.total.lag|io.confluent.kafka.server.request.total.time.ms.p99|io.confluent.kafka.server.broker.topic.failed.fetch.requests.rate.1.min|io.confluent.kafka.server.broker.topic.total.fetch.requests.rate.1.min|io.confluent.kafka.server.partition.caught.up.replicas.count|io.confluent.kafka.server.partition.observer.replicas.count|io.confluent.kafka.server.OSMetrics.CpuLoad|io.confluent.kafka.server.network.io|io.confluent.kafka.server.log.log.segments|io.confluent.kafka.server.log.log.size|io.confluent.kafka.server.partition.leader.replicas.count|io.confluent.kafka.server.partition.under.replicated.replicas|io.confluent.kafka.server.partition.under.min.isr.count|io.confluent.kafka.server.broker.topic.bytes.in.rate.1.min|io.confluent.kafka.server.broker.topic.bytes.out.rate.1.min|io.confluent.kafka.server.broker.topic.messages.in.rate.1.min|io.confluent.kafka.server.group.coordinator.group.count|io.confluent.kafka.server.group.coordinator.consumer.group.count|io.confluent.kafka.server.controller.active.controller.count|io.confluent.kafka.server.controller.offline.partitions.count|io.confluent.kafka.server.controller.global.partition.count|io.confluent.kafka.server.controller.global.topic.count"
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_CLIENT_BASE_URL: http://prometheus:9090/api/v1/otlp
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_CLIENT_COMPRESSION: gzip
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_API_KEY: dummy
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_API_SECRET: dummy
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_BUFFER_PENDING_BATCHES_MAX: 80
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_BUFFER_BATCH_ITEMS_MAX: 4000
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_C3PLUSPLUS_BUFFER_INFLIGHT_SUBMISSIONS_MAX: 10
+      KAFKA_CONFLUENT_TELEMETRY_METRICS_COLLECTOR_INTERVAL_MS: 60000
+      KAFKA_CONFLUENT_TELEMETRY_REMOTECONFIG_CONFLUENT_ENABLED: "false"
+      KAFKA_CONFLUENT_CONSUMER_LAG_EMITTER_ENABLED: "true"
+    volumes:
+      - broker-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server broker:29092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+
+  # ---- Prometheus (metrics store for Control Center Next Gen) ----
+  prometheus:
+    image: confluentinc/cp-enterprise-prometheus:2.6.1
+    hostname: prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    environment:
+      SHOULD_LOG_TO_FILE: "false"
+    volumes:
+      - c3-config:/etc/confluent-control-center   # config generated by Control Center, shared
+    restart: on-failure
+
+  # ---- Alertmanager ----
+  alertmanager:
+    image: confluentinc/cp-enterprise-alertmanager:2.6.1
+    hostname: alertmanager
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    environment:
+      SHOULD_LOG_TO_FILE: "false"
+    volumes:
+      - c3-config:/etc/confluent-control-center
+    restart: on-failure
+
+  # ---- Control Center (Next Gen) ----
+  control-center:
+    image: confluentinc/cp-enterprise-control-center-next-gen:2.6.1
+    hostname: control-center
+    container_name: control-center
+    depends_on:
+      broker:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+      alertmanager:
+        condition: service_started
+    ports:
+      - "9021:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: broker:29092
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONTROL_CENTER_PROMETHEUS_ENABLE: "true"
+      CONTROL_CENTER_PROMETHEUS_URL: http://prometheus:9090
+      CONTROL_CENTER_PROMETHEUS_RULES_FILE: /etc/confluent-control-center/trigger_rules-generated.yml
+      CONTROL_CENTER_ALERTMANAGER_CONFIG_FILE: /etc/confluent-control-center/alertmanager-generated.yml
+      CONTROL_CENTER_ALERTMANAGER_URL: http://alertmanager:9093
+      # Uncomment together with the schema-registry / connect services below:
+      # CONTROL_CENTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      # CONTROL_CENTER_CONNECT_CONNECT-CLUSTER_CLUSTER: http://connect:8083
+      PORT: 9021
+    volumes:
+      - c3-config:/etc/confluent-control-center
+
+  # # ---- Schema Registry (disabled for now) ----
+  # schema-registry:
+  #   image: confluentinc/cp-schema-registry:8.3.2
+  #   hostname: schema-registry
+  #   container_name: schema-registry
+  #   depends_on:
+  #     broker:
+  #       condition: service_healthy
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     SCHEMA_REGISTRY_HOST_NAME: schema-registry
+  #     SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: broker:29092
+  #     SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  # # ---- Kafka Connect (disabled for now) ----
+  # connect:
+  #   image: confluentinc/cp-kafka-connect:8.3.2
+  #   hostname: connect
+  #   container_name: connect
+  #   depends_on:
+  #     broker:
+  #       condition: service_healthy
+  #     # schema-registry:
+  #     #   condition: service_started
+  #   ports:
+  #     - "8083:8083"
+  #   environment:
+  #     CONNECT_BOOTSTRAP_SERVERS: broker:29092
+  #     CONNECT_REST_ADVERTISED_HOST_NAME: connect
+  #     CONNECT_REST_PORT: 8083
+  #     CONNECT_GROUP_ID: connect-cluster
+  #     CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+  #     CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+  #     CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+  #     CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+  #     CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+  #     CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+  #     CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+  #     CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+  #     CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+  #     CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+
+volumes:
+  controller-data:
+  broker-data:
+  c3-config:
