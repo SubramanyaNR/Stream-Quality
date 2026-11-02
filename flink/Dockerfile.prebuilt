@@ -1,0 +1,9 @@
+# Same runtime image as flink/Dockerfile, but copies a jar you already built (mvn package): used by the e2e and CI,
+# where the Maven-inside-Docker stage is slow and needs the network.
+ARG FLINK_IMAGE=flink:2.2.1-java17
+FROM ${FLINK_IMAGE}
+USER root
+COPY flink-job/target/stream-quality-job.jar /opt/flink/usrlib/stream-quality-job.jar
+COPY flink/bin/submit-job.sh flink/bin/run-embedded.sh /opt/flink/bin/
+RUN chmod 755 /opt/flink/bin/*.sh && mkdir -p /var/lib/sq/state && chown flink:flink /var/lib/sq/state
+USER flink

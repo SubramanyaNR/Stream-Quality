@@ -1,0 +1,43 @@
+# End-to-end test stack: real Kafka (KRaft), real Postgres with the shipped schema, the job in compact mode.
+# Driven by scripts/e2e.sh (local) and .github/workflows/ci.yml. Not for production.
+name: sq-e2e
+services:
+  kafka:
+    image: apache/kafka:4.0.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null"]
+      interval: 5s
+      retries: 30
+  postgres:
+    image: postgres:17-alpine
+    environment: { POSTGRES_DB: sq, POSTGRES_USER: sq_admin, POSTGRES_PASSWORD: admin }
+    ports: ["15433:5432"]
+    volumes: ["./postgres/init:/docker-entrypoint-initdb.d:ro"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sq_admin -d sq && PGPASSWORD=admin psql -h 127.0.0.1 -U sq_admin -d sq -tAc \"SELECT 1 FROM pg_roles WHERE rolname='sq_reader'\" | grep -qx 1"]
+      interval: 3s
+      retries: 40
+  job:
+    build: { context: ., dockerfile: flink/Dockerfile.prebuilt }
+    entrypoint: ["/opt/flink/bin/run-embedded.sh"]
+    depends_on: { kafka: { condition: service_healthy }, postgres: { condition: service_healthy } }
+    mem_limit: 512m
+    volumes: ["./e2e/config:/opt/sq/config:ro"]
+    environment:
+      SQ_HEAP: 256m
+      SQ_CONFIG_DIR: /opt/sq/config
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/sq
+      POSTGRES_USER: sq_writer
+      POSTGRES_PASSWORD: sq_writer_pw
