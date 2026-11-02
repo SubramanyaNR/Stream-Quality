@@ -26,7 +26,7 @@ Records that fail validation are routed by a Flink **side output** to a dead-let
 
 Messages can be plain JSON, or in the **Confluent wire format** (`0x00` + 4-byte schema id + payload) produced by Confluent/Karapace
 serializers. Framed messages are decoded with the schema fetched **by id** (JSON Schema is validated against the exact schema it was
-written with; Avro is decoded to the same shape every check uses). Protobuf is not supported (dead-lettered as `unsupported_format`).
+written with; Avro is decoded to the same shape every check uses). Confluent-framed Protobuf is decoded too (message indexes, nested messages, maps, enums, schema references/imports); proto3 fields without presence are filled with their default so a legitimate `0`/`""` is not counted as null, while `optional`, oneof, message, repeated and map fields stay absent when unset. Undecodable Protobuf bodies go to the dead-letter topic as `protobuf_decode_failed`.
 If the registry is down, framed JSON is still read (without validation) and Avro is counted for volume but ignored by field checks.
 Pick the registry in `cluster.env` (`REGISTRY_ENABLED`, `REGISTRY_TYPE`, `REGISTRY_URL`); `make schemas` registers the example schemas in `config/schemas/`.
 

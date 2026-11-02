@@ -44,6 +44,11 @@ public final class ConfluentRegistryClient implements RegistryClient {
     }
 
     @Override
+    public Optional<RegisteredSchema> fetchVersion(String subject, int version) throws IOException {
+        return parse(get("/subjects/" + enc(subject) + "/versions/" + version), "subject " + subject + " version " + version);
+    }
+
+    @Override
     public boolean ping() {
         try { return get("/config").statusCode() == 200; } catch (IOException e) { return false; }
     }
@@ -53,7 +58,10 @@ public final class ConfluentRegistryClient implements RegistryClient {
         if (r.statusCode() != 200) throw new IOException("Registry HTTP " + r.statusCode() + " for " + what);
         JsonNode n = MAPPER.readTree(r.body());
         if (!n.hasNonNull("schema")) throw new IOException("Registry response for " + what + " has no 'schema' field");
-        return Optional.of(new RegisteredSchema(n.path("schemaType").asText(RegisteredSchema.AVRO).toUpperCase(), n.get("schema").asText()));
+        java.util.List<RegisteredSchema.Reference> refs = new java.util.ArrayList<>();
+        for (JsonNode ref : n.path("references"))
+            refs.add(new RegisteredSchema.Reference(ref.path("name").asText(), ref.path("subject").asText(), ref.path("version").asInt(-1)));
+        return Optional.of(new RegisteredSchema(n.path("schemaType").asText(RegisteredSchema.AVRO).toUpperCase(), n.get("schema").asText(), refs));
     }
 
     private HttpResponse<String> get(String path) throws IOException {

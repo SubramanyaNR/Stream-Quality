@@ -18,7 +18,7 @@ import org.apache.avro.io.DecoderFactory;
  *   Confluent wire format  0x00 | 4-byte id | body -> schema fetched BY ID from the registry:
  *       JSON Schema  -> body is JSON, validated later against that exact schema
  *       AVRO         -> body is decoded with the writer schema, converted to JSON
- *       PROTOBUF     -> not supported (dead-lettered with reason unsupported_format)
+ *       PROTOBUF     -> message-index header skipped, body decoded dynamically with the writer .proto (and its references)
  * Framing is only recognised when a registry that supports lookup by id is configured (sq.source.framing=auto, the
  * default); JSON text can never start with 0x00, so detection is unambiguous.
  *
@@ -40,11 +40,13 @@ public final class PayloadDecoder {
     private final SchemaProvider schemas;                 // null = no registry
     private final boolean framing;
     private final Map<Integer, GenericDatumReader<GenericRecord>> avroReaders = new ConcurrentHashMap<>();
+    private final ProtobufJson protobuf;
 
     public PayloadDecoder(ObjectMapper mapper, SchemaProvider schemas, boolean framingEnabled) {
         this.mapper = mapper;
         this.schemas = schemas;
         this.framing = framingEnabled && schemas != null && schemas.supportsIds();
+        this.protobuf = new ProtobufJson(mapper, ref -> schemas.resolveReference(ref));
     }
 
     public Decoded decode(byte[] value) {
@@ -67,6 +69,8 @@ public final class PayloadDecoder {
                 return plain(value, HEADER, id, s);
             case RegisteredSchema.AVRO:
                 return avro(value, id, s);
+            case RegisteredSchema.PROTOBUF:
+                return protobuf(value, id, s);
             default:
                 return Decoded.fail(DlqRecord.UNSUPPORTED_FORMAT, s.type() + " payloads are not supported (schema id " + id + ")");
         }
@@ -81,6 +85,20 @@ public final class PayloadDecoder {
             return Decoded.fail(DlqRecord.INVALID_JSON, e.getMessage());
         }
     }
+
+    private Decoded protobuf(byte[] value, int id, RegisteredSchema s) {
+        try {
+            return Decoded.ok(protobuf.decode(id, s, value, HEADER), id, s);
+        } catch (ProtobufJson.DecodeException e) {
+            return Decoded.fail(DlqRecord.PROTOBUF_DECODE_FAILED, trim(e.getMessage()));
+        } catch (java.io.IOException e) {
+            return Decoded.undecodable();                     // an imported schema could not be fetched (registry down): count it, skip field checks
+        } catch (Exception e) {
+            return Decoded.fail(DlqRecord.PROTOBUF_DECODE_FAILED, e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+    }
+
+    private static String trim(String m) { return m == null ? "" : m; }
 
     private Decoded avro(byte[] value, int id, RegisteredSchema s) {
         try {

@@ -36,7 +36,7 @@ Flows:
 | # | Decision | Rationale / evidence |
 |---|---|---|
 | 1 | Flink 2.2.1, Java 17, connector `5.0.0-2.2`, datasketches **6.2.0** | Flink 2.x removed the legacy source/sink APIs: new API only. datasketches ≥7 needs a newer JVM than the image. |
-| 2 | JSON only in v1 (`ParseFn` is the single decode point) | Avoids Confluent wire-format assumptions. Avro/Protobuf = a new decoder. |
+| 2 | JSON only in v1 (`ParseFn` is the single decode point) | Avoids Confluent wire-format assumptions. Avro and Protobuf were added as decoders behind it (`PayloadDecoder`; Protobuf via `ProtobufJson`, which uses Wire only to parse the registered `.proto` text and walks the protobuf wire format itself, because Wire's dynamic adapter does not support `map<>` fields). |
 | 3 | **Windows are tumbling over *ingestion time*** (when Flink parsed the record), payload timestamp used only for freshness | First design used payload event time; stale events (exactly what freshness must measure) arrived behind the watermark and were dropped as late. It also broke backfill. Found while designing the freshness check. |
 | 4 | **Synthetic ticks** (per topic, 1/s) advance the watermark and force empty windows | A silent topic emits no records ⇒ no window ⇒ the volume check could never report 0. Verified by e2e (silence ⇒ `volume=0, fail`). |
 | 5 | One keyed operator runs all checks (`CompositeCheck`); `QualityCheck<ACC>` is the contract | One state access per record. New check = one class + one list entry. |

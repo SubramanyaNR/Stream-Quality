@@ -104,6 +104,18 @@ public final class SchemaProvider implements AutoCloseable {
         }
     }
 
+    private final Map<String, RegisteredSchema> refCache = new ConcurrentHashMap<>();
+
+    /** A schema referenced by another (Protobuf imports). Cached for good (versions are immutable); null if the registry does not know it. */
+    public RegisteredSchema resolveReference(RegisteredSchema.Reference ref) throws java.io.IOException {
+        String key = ref.subject() + "#" + ref.version();
+        RegisteredSchema c = refCache.get(key);
+        if (c != null) return c;
+        Optional<RegisteredSchema> found = client.fetchVersion(ref.subject(), ref.version());
+        found.ifPresent(f -> refCache.put(key, f));
+        return found.orElse(null);
+    }
+
     /** Validate a JSON payload against the exact (writer) schema it was serialized with. Non-JSON schema types are not validated here. */
     public Result validateWithSchema(int id, RegisteredSchema schema, JsonNode payload) {
         if (!RegisteredSchema.JSON.equals(schema.type())) return Result.SKIPPED;

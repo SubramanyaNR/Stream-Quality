@@ -16,6 +16,11 @@ public interface RegistryClient {
         throw new UnsupportedOperationException("this registry type does not support lookup by schema id");
     }
 
+    /** A specific version of a subject (used to resolve schema references); empty if unknown. */
+    default Optional<RegisteredSchema> fetchVersion(String subject, int version) throws IOException {
+        throw new UnsupportedOperationException("this registry type does not support schema references");
+    }
+
     /** Cheap liveness probe. */
     boolean ping();
 }

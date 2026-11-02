@@ -54,7 +54,7 @@ Standalone `kafka` container on `kafka-net` (`KAFKA_BOOTSTRAP=kafka:29092`, host
 - Silence detection (empty window) only covers topics listed in `config/thresholds.yaml`; pattern-matched topics get checks once data flows.
 - Schema registry: off by default. `REGISTRY_TYPE` in `cluster.env` selects `apicurio` (native v3), or `confluent` / `karapace` / `redpanda` / `ccompat`
   (Confluent REST API: JSON Schema + Avro, Confluent wire format). Verified 2026-10-08 against a real Karapace and Apicurio's `/apis/ccompat/v7`
-  (see docs/TESTING.md); **Confluent's own server was not run**. Protobuf is not supported (dead-lettered as `unsupported_format`). The Docker image
+  (see docs/TESTING.md); **Confluent's own server was not run**. Protobuf is supported (see docs/TESTING.md for what was verified). The Docker image
   has not been rebuilt/run since Avro was added to the shaded jar.
 - A cluster outside Docker: set `KAFKA_DOCKER_NETWORK` to a network that exists (compose requires it); making it optional is open.
 - The repo generator was removed (2026-10-08); see "Test data and current setup".

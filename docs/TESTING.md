@@ -22,6 +22,17 @@ It needs Docker, a built jar and `psycopg2`; it takes about 5 minutes. CI (`.git
 Status: passed on the second run here; the first run failed one assertion ("no drift during the healthy phase") that I could not reproduce,
 so treat it as possibly timing-sensitive (the script now prints the offending rows if it recurs). The CI workflow itself has not been run on GitHub.
 
+## Protobuf (verified 2026-11-02)
+- Unit tests (`ProtobufJsonTest`, payloads hand-encoded independently of the decoding library): every scalar kind, packed repeated, zigzag, fixed-width,
+  unsigned 64-bit, enum names, nested messages, `map<>`, oneof, `optional` presence, proto3 default filling, message-index selection (including nested
+  `[0,0]`), schema references (imports), unknown fields skipped, truncated/malformed bodies, missing reference vs registry outage.
+- Real registry: Apicurio's Confluent-compatible API held a schema that imports a second registered schema (a reference). A Python producer using
+  Google's `protobuf` library and `grpc_tools.protoc` wrote Confluent-framed messages (maps, enum, repeated, nested, imported type). The job decoded them
+  and produced null-rate, type-drift, schema-drift and volume rows; a truncated body landed in the dead-letter topic as `protobuf_decode_failed`.
+- NOT verified: Karapace or Confluent Schema Registry serving Protobuf (Karapace needs `protoc`), proto2 groups/extensions, `google.protobuf.Any`,
+  very large or deeply recursive schemas (nesting is capped at 32 levels). Protobuf is not part of `make e2e`.
+- Cost: the shaded jar grew from 29 MB to 39 MB (Wire + Kotlin runtime).
+
 ## Verified 2026-11-02 (new work), against real Kafka/Postgres/Prometheus
 - Type drift: 25% wrong-typed values -> FAIL (0.208, 0.198), no registry. Schema drift: appearing and vanishing field flagged.
 - Silence on a regex-matched topic that is not in `thresholds.yaml`: volume FAIL produced.

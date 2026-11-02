@@ -137,7 +137,7 @@ class PayloadDecoderTest {
     @Test void corruptAvroUnknownIdAndProtobufAreDeadLetteredWithSpecificReasons() {
         assertThat(decoder(true).decode(frame(2, new byte[] {1, 2})).failReason()).isEqualTo(DlqRecord.AVRO_DECODE_FAILED);
         assertThat(decoder(true).decode(frame(999, new byte[] {1})).failReason()).isEqualTo(DlqRecord.UNKNOWN_SCHEMA_ID);
-        assertThat(decoder(true).decode(frame(3, new byte[] {1})).failReason()).isEqualTo(DlqRecord.UNSUPPORTED_FORMAT);
+        assertThat(decoder(true).decode(frame(3, new byte[] {0, 1})).failReason()).isEqualTo(DlqRecord.PROTOBUF_DECODE_FAILED);   // schema 3 declares no messages
         assertThat(decoder(true).decode(frame(1, "{broken".getBytes())).failReason()).isEqualTo(DlqRecord.INVALID_JSON);
     }
 
