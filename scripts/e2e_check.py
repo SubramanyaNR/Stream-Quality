@@ -76,10 +76,10 @@ Q = ("SELECT count(*) n FROM sq.check_results WHERE topic=%s AND check_type=%s A
 
 check("job wrote results to Postgres", rows("SELECT count(*) n FROM sq.check_results WHERE topic='e2e.orders'")[0]["n"] > 10)
 check("volume ok while healthy", rows(Q, "e2e.orders", "volume", "ok", *between(healthy))[0]["n"] >= 3)
-check("healthy phase raised no type/schema drift",
-      rows("SELECT count(*) n FROM sq.check_results WHERE topic='e2e.orders' AND check_type IN ('type_drift','schema_drift') AND status<>'ok' "
-           "AND window_start BETWEEN to_timestamp(%s) AND to_timestamp(%s)", healthy[0] + 25, healthy[1] - 5)[0]["n"] == 0,
-      "drift flagged on clean traffic (after warm-up)")
+bad = rows("SELECT to_char(window_start,'HH24:MI:SS') ws, check_type, field, status, value, details::text d FROM sq.check_results WHERE topic='e2e.orders' "
+           "AND check_type IN ('type_drift','schema_drift') AND status<>'ok' AND window_start BETWEEN to_timestamp(%s) AND to_timestamp(%s) ORDER BY 1",
+           healthy[0] + 25, healthy[1] - 5)
+check("healthy phase raised no type/schema drift", not bad, str(bad[:3]))
 check("type drift FAILS on ~25% wrong-typed amounts (no registry)", rows(Q, "e2e.orders", "type_drift", "fail", *between(wrong))[0]["n"] >= 1)
 check("schema drift flags the new field", rows("SELECT count(*) n FROM sq.check_results WHERE topic='e2e.orders' AND check_type='schema_drift' "
       "AND status<>'ok' AND details::text LIKE '%%currency_v2%%' AND window_start BETWEEN to_timestamp(%s) AND to_timestamp(%s)", *between(newf))[0]["n"] >= 1)
