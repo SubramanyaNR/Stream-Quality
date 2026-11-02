@@ -34,3 +34,22 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: "Quality monitor metrics are absent (Flink job not running?)"
+
+      # --- The monitor's OWN health: if it falls behind, every windowed check is silently skewed. ---
+      # Kafka-side backlog of the monitor's consumer (records), worst partition.
+      - alert: QualityMonitorLagging
+        expr: max(flink_taskmanager_job_task_operator_KafkaSourceReader_KafkaConsumer_records_lag_max) > 10000
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Quality monitor is {{ $value | humanize }} records behind on Kafka: its check results are skewed"
+          description: "The monitor consumer lags the topics. Windows are over INGESTION time, so a backlog makes volume, freshness and drift checks wrong until it catches up. Raise parallelism or check the job."
+
+      # Same thing in seconds: now minus the Kafka timestamp of the records being processed (needs CreateTime ~ wall clock).
+      - alert: QualityMonitorBehind
+        expr: max(flink_taskmanager_job_task_operator_consumer_delay_ms) > 60000
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Quality monitor processes records {{ $value | humanizeDuration }} after they were produced"
+          description: "Consumption delay above 60s. Check results are skewed until the monitor catches up (or the producers are back-dating Kafka timestamps)."

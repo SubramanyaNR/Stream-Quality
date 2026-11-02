@@ -41,6 +41,7 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
     private transient SchemaProvider schemas;
     private transient PayloadDecoder decoder;
     private transient AtomicInteger registryUp;
+    private transient volatile long delayMaxMs, delayAtMs;
 
     public ParseFn(Thresholds thresholds, RegistryConfig registryCfg) { this(thresholds, registryCfg, true); }
 
@@ -54,6 +55,10 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
         mapper = new ObjectMapper();
         registryUp = new AtomicInteger(registryCfg != null && registryCfg.enabled() ? 1 : 0);
         getRuntimeContext().getMetricGroup().gauge("registry_up", (Gauge<Integer>) registryUp::get);
+        // How far behind the monitor is, in time: ingestion (now) minus the record's Kafka timestamp, max over ~10s.
+        // If this grows the monitor is falling behind and every windowed check is skewed (alert: QualityMonitorBehind).
+        getRuntimeContext().getMetricGroup().gauge("consumer_delay_ms",
+                (Gauge<Long>) () -> System.currentTimeMillis() - delayAtMs > 15_000 ? 0L : delayMaxMs);
         if (registryCfg != null && registryCfg.enabled()) {
             schemas = new SchemaProvider(registryCfg, RegistryClients.create(registryCfg), System::currentTimeMillis);
         }
@@ -66,6 +71,7 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
     @Override
     public void processElement(RawRecord r, Context ctx, Collector<ParsedRecord> out) {
         long now = System.currentTimeMillis();
+        noteDelay(now, r.timestampMs());
         if (r.value() == null) { dlq(ctx, r, DlqRecord.NULL_PAYLOAD, "tombstone / null value"); return; }
         PayloadDecoder.Decoded d = decoder.decode(r.value());
         if (d.failReason() != null) { dlq(ctx, r, d.failReason(), trunc(d.failDetail())); return; }
@@ -125,6 +131,13 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
         out.collect(new ParsedRecord(r.topic(), r.partition(), r.offset(), eventTime, fromPayload, now, false, fields, structural, structuralError, false, types, keys));
         if (structural == ParsedRecord.STRUCT_INVALID) dlq(ctx, r, DlqRecord.SCHEMA_VIOLATION, structuralError);
         if (missingRequired != null) dlq(ctx, r, DlqRecord.REQUIRED_FIELD_MISSING, missingRequired.toString());
+    }
+
+    private void noteDelay(long now, long kafkaTsMs) {
+        if (kafkaTsMs <= 0) return;
+        long d = Math.max(0, now - kafkaTsMs);
+        if (now - delayAtMs > 10_000) { delayMaxMs = d; delayAtMs = now; }
+        else if (d > delayMaxMs) delayMaxMs = d;
     }
 
     static String typeTag(JsonNode v) {
