@@ -12,7 +12,7 @@ FROM ${FLINK_IMAGE}
 # checkpoint volume writable by the unprivileged flink user.
 RUN mkdir -p /opt/flink/checkpoints && chown -R flink:flink /opt/flink/checkpoints
 COPY --from=build /build/target/stream-quality-job.jar /opt/flink/usrlib/stream-quality-job.jar
-COPY flink/bin/submit-job.sh /opt/flink/bin/submit-job.sh
+COPY flink/bin/submit-job.sh flink/bin/run-embedded.sh /opt/flink/bin/
 USER root
-RUN chmod 755 /opt/flink/bin/submit-job.sh
+RUN chmod 755 /opt/flink/bin/submit-job.sh /opt/flink/bin/run-embedded.sh && mkdir -p /var/lib/sq/state && chown flink:flink /var/lib/sq/state
 USER flink

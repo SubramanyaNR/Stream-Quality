@@ -15,7 +15,7 @@ up: ## one command: env, DLQ topic, build image, start stack, submit job
 down: ; docker compose down
 clean: ; docker compose down -v
 build: ; docker compose build
-logs: ; docker compose logs -f --tail=100 flink-taskmanager flink-job-submit
+logs: ; docker compose logs -f --tail=100 sq-job flink-taskmanager flink-job-submit
 dlq: ; ./scripts/create-dlq-topic.sh
 check: ; ./scripts/check-cluster.sh
 migrate: ; docker compose exec -T postgres psql -U sq_admin -d sq -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/01_init.sql   # upgrade an existing database to the current schema (idempotent)

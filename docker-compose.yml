@@ -47,6 +47,7 @@ services:
 
   flink-jobmanager:
     <<: *flink-common
+    profiles: [cluster]                                # standalone Flink cluster (COMPOSE_PROFILES=cluster)
     container_name: sq-flink-jm
     command: jobmanager
     ports: ["8082:8081"]                               # Flink UI (8082 avoids clashing with Apicurio on 8081)
@@ -72,6 +73,7 @@ services:
 
   flink-taskmanager:
     <<: *flink-common
+    profiles: [cluster]                                # standalone Flink cluster (COMPOSE_PROFILES=cluster)
     container_name: sq-flink-tm
     command: taskmanager
     depends_on: { flink-jobmanager: { condition: service_healthy } }
@@ -97,6 +99,31 @@ services:
     restart: "no"
     entrypoint: ["/opt/flink/bin/submit-job.sh"]
     environment:
+      JOB_JAR: /opt/flink/usrlib/stream-quality-job.jar
+      SQ_CONFIG_DIR: /opt/sq/config
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/sq
+      POSTGRES_USER: sq_writer
+      POSTGRES_PASSWORD: sq_writer_pw
+
+  # Compact mode (default): the job runs embedded in ONE small JVM, no separate JobManager/TaskManager containers.
+  # Same image, same checks, same metrics; state survives restarts via retained checkpoints on the sq-state volume.
+  sq-job:
+    <<: *flink-common
+    profiles: [compact]
+    container_name: sq-job
+    entrypoint: ["/opt/flink/bin/run-embedded.sh"]
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: ${SQ_JOB_MEM_LIMIT:-512m}
+    networks:
+      sq: { aliases: [flink-taskmanager] }             # Prometheus scrapes flink-taskmanager:9249 in both modes
+      kafka: {}
+    volumes:
+      - ./config:/opt/sq/config:ro
+      - sq-state:/var/lib/sq/state
+    environment:
+      SQ_HEAP: ${SQ_HEAP:-256m}
       JOB_JAR: /opt/flink/usrlib/stream-quality-job.jar
       SQ_CONFIG_DIR: /opt/sq/config
       POSTGRES_URL: jdbc:postgresql://postgres:5432/sq
@@ -152,4 +179,4 @@ services:
 networks:
   sq: { name: sq }
   kafka: { name: "${KAFKA_DOCKER_NETWORK:?set KAFKA_DOCKER_NETWORK in cluster.env (run via make)}", external: true }   # the Kafka cluster's network
-volumes: { pg-data: {}, prom-data: {}, am-data: {}, grafana-data: {}, flink-checkpoints: {} }
+volumes: { pg-data: {}, prom-data: {}, am-data: {}, grafana-data: {}, flink-checkpoints: {}, sq-state: {} }
