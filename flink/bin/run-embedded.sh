@@ -24,9 +24,7 @@ metrics.reporter.prom.port: 9249
 rest.bind-address: 0.0.0.0
 taskmanager.memory.managed.size: ${SQ_MANAGED_MB:-16}m
 taskmanager.memory.network.min: 16m
-taskmanager.memory.network.max: 32m
-taskmanager.memory.framework.off-heap.size: 32m
-taskmanager.memory.jvm-metaspace.size: 96m
+taskmanager.memory.network.max: 16m
 taskmanager.numberOfTaskSlots: 4
 CFG
 [ -n "$RESTORE" ] && { echo "restoring state from $RESTORE"; echo "execution.state-recovery.path: file://$RESTORE" >> "$CONF/config.yaml"; } || echo "no retained checkpoint: starting fresh"
