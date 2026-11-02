@@ -40,13 +40,14 @@ public final class PostgresSink implements Sink<DbRow> {
     // JSON field names == column names; timestamps arrive as 'yyyy-MM-dd HH:mm:ss.SSS' UTC text.
     static final Map<String, String> SQL = Map.of(
             "check_results",
-            "INSERT INTO sq.check_results (topic, field, check_type, window_start, window_end, value, threshold, status, details, job_id) "
+            "INSERT INTO sq.check_results (topic, field, check_type, window_start, window_end, value, threshold, status, details, baseline, p50_ms, p99_ms, job_id) "
                     + "SELECT x.topic, x.field, x.check_type, x.window_start::timestamp AT TIME ZONE 'UTC', x.window_end::timestamp AT TIME ZONE 'UTC', "
-                    + "x.value, x.threshold, x.status::sq.check_status, x.details::jsonb, x.job_id "
+                    + "x.value, x.threshold, x.status::sq.check_status, x.details::jsonb, x.baseline, x.p50_ms, x.p99_ms, x.job_id "
                     + "FROM jsonb_to_recordset(?::jsonb) AS x(topic text, field text, check_type text, window_start text, window_end text, "
-                    + "value double precision, threshold double precision, status text, details text, job_id text) "
+                    + "value double precision, threshold double precision, status text, details text, baseline double precision, p50_ms double precision, p99_ms double precision, job_id text) "
                     + "ON CONFLICT (topic, check_type, field, window_start, window_end) DO UPDATE SET "
                     + "value = EXCLUDED.value, threshold = EXCLUDED.threshold, status = EXCLUDED.status, details = EXCLUDED.details, "
+                    + "baseline = EXCLUDED.baseline, p50_ms = EXCLUDED.p50_ms, p99_ms = EXCLUDED.p99_ms, "
                     + "job_id = EXCLUDED.job_id, ingested_at = now()",
             "job_heartbeat",
             "INSERT INTO sq.job_heartbeat (job_id, ts, version, kafka_bootstrap, kafka_status, kafka_cluster_id, registry_status) "

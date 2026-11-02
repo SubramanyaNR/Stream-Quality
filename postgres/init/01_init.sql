@@ -18,19 +18,32 @@ CREATE TABLE IF NOT EXISTS sq.check_results
 (
     topic         text              NOT NULL,
     field         text              NOT NULL DEFAULT '',            -- '' = topic-level check
-    check_type    text              NOT NULL,                       -- volume|null_rate|cardinality|freshness|structural
+    check_type    text              NOT NULL,                       -- volume|null_rate|cardinality|freshness|structural|type_drift|schema_drift
     window_start  timestamptz       NOT NULL,
     window_end    timestamptz       NOT NULL,
     value         double precision  NOT NULL,
     threshold     double precision  NOT NULL,                       -- threshold that determined status
     status        sq.check_status   NOT NULL,
-    details       jsonb             NOT NULL DEFAULT '{}',
+    -- Storage: `details` (check-specific JSON) is kept ONLY for warn/fail rows, where it explains the violation; ok rows
+    -- store NULL. The few numbers the baseline panels need live in plain columns instead (8 bytes when set, ~0 when NULL).
+    details       jsonb,
+    baseline      double precision,                                 -- volume: baseline msg/s; cardinality: baseline distinct count
+    p50_ms        double precision,                                 -- freshness percentiles
+    p99_ms        double precision,
     job_id        text              NOT NULL DEFAULT '',
     ingested_at   timestamptz       NOT NULL DEFAULT now(),
     PRIMARY KEY (topic, check_type, field, window_start, window_end)
 );
--- time-range scans (every dashboard panel) and retention deletes
-CREATE INDEX IF NOT EXISTS idx_check_results_window_start ON sq.check_results (window_start DESC);
+-- Upgrade path for databases created by an earlier version (this file is idempotent; `make migrate` re-runs it).
+ALTER TABLE sq.check_results ADD COLUMN IF NOT EXISTS baseline double precision;
+ALTER TABLE sq.check_results ADD COLUMN IF NOT EXISTS p50_ms   double precision;
+ALTER TABLE sq.check_results ADD COLUMN IF NOT EXISTS p99_ms   double precision;
+ALTER TABLE sq.check_results ALTER COLUMN details DROP NOT NULL;
+ALTER TABLE sq.check_results ALTER COLUMN details DROP DEFAULT;
+DROP INDEX IF EXISTS sq.idx_check_results_window_start;           -- the old full B-tree on window_start (~1/3 of the table's size)
+-- Time-range scans and retention deletes: a BRIN index is ~1000x smaller than a B-tree and fits append-mostly time data.
+-- (Per-topic dashboard queries are served by the primary key, which leads with topic.)
+CREATE INDEX IF NOT EXISTS idx_check_results_window_brin ON sq.check_results USING brin (window_start) WITH (pages_per_range = 32);
 -- the violation log reads only non-ok rows: a partial index keeps it tiny and fast
 CREATE INDEX IF NOT EXISTS idx_check_results_violations ON sq.check_results (window_end DESC) WHERE status <> 'ok';
 
@@ -147,7 +160,7 @@ WHERE f.status = 'firing';
 -- ---------- 5. Retention ----------
 -- Plain DELETEs are fine at this volume (~1 row/field/minute). If you shorten windows or monitor thousands of
 -- fields (> ~100M rows), convert check_results to PARTITION BY RANGE (window_start) or use TimescaleDB.
-CREATE OR REPLACE FUNCTION sq.purge_old(results_days int DEFAULT 90, heartbeat_days int DEFAULT 14) RETURNS bigint
+CREATE OR REPLACE FUNCTION sq.purge_old(results_days int DEFAULT 30, heartbeat_days int DEFAULT 14) RETURNS bigint
 LANGUAGE plpgsql AS $$
 DECLARE n bigint; m bigint;
 BEGIN

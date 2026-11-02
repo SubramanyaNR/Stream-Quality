@@ -122,16 +122,16 @@ p2 = [
              "percentunit", "Fraction of records where the field is null/missing. Dashed = threshold that was crossed (shown only while violating)."),
     ts_panel(2, "Cardinality (HLL estimate) vs baseline", 12, 0,
              f"SELECT window_start AS {T}, field AS metric, value AS distinct_estimate {cr(f'check_type = {chr(39)}cardinality{chr(39)} AND {TOPIC_F} AND {FIELD_F}')} ORDER BY 1",
-             f"SELECT window_start AS {T}, field || ' baseline' AS metric, (details->>'baseline')::float8 AS baseline {cr(f'check_type = {chr(39)}cardinality{chr(39)} AND {TOPIC_F} AND {FIELD_F} AND details->>{chr(39)}baseline{chr(39)} IS NOT NULL')} ORDER BY 1",
+             f"SELECT window_start AS {T}, field || ' baseline' AS metric, baseline {cr(f'check_type = {chr(39)}cardinality{chr(39)} AND {TOPIC_F} AND {FIELD_F} AND baseline IS NOT NULL')} ORDER BY 1",
              "short", "Approximate distinct values per window (HyperLogLog, ~1.6% error) against the mean of recent healthy windows."),
     ts_panel(3, "Freshness: p50 / p95 / p99 latency", 0, 8,
-             f"SELECT * FROM (SELECT window_start AS {T}, 'p50' AS metric, (details->>'p50_ms')::float8 AS ms {cr(f'check_type = {chr(39)}freshness{chr(39)} AND {TOPIC_F}')} UNION ALL "
+             f"SELECT * FROM (SELECT window_start AS {T}, 'p50' AS metric, p50_ms AS ms {cr(f'check_type = {chr(39)}freshness{chr(39)} AND {TOPIC_F}')} UNION ALL "
              f"SELECT window_start, 'p95', value {cr(f'check_type = {chr(39)}freshness{chr(39)} AND {TOPIC_F}')} UNION ALL "
-             f"SELECT window_start, 'p99', (details->>'p99_ms')::float8 {cr(f'check_type = {chr(39)}freshness{chr(39)} AND {TOPIC_F}')}) u ORDER BY 1",
+             f"SELECT window_start, 'p99', p99_ms {cr(f'check_type = {chr(39)}freshness{chr(39)} AND {TOPIC_F}')}) u ORDER BY 1",
              None, "ms", "Processing time minus the payload timestamp. Status is judged on p95."),
     ts_panel(4, "Volume (messages/s) vs baseline", 12, 8,
              f"SELECT window_start AS {T}, topic AS metric, value AS msgs_per_s {cr(f'check_type = {chr(39)}volume{chr(39)} AND {TOPIC_F}')} ORDER BY 1",
-             f"SELECT window_start AS {T}, topic || ' baseline' AS metric, (details->>'baseline_rate')::float8 AS baseline {cr(f'check_type = {chr(39)}volume{chr(39)} AND {TOPIC_F} AND details->>{chr(39)}baseline_rate{chr(39)} IS NOT NULL')} ORDER BY 1",
+             f"SELECT window_start AS {T}, topic || ' baseline' AS metric, baseline {cr(f'check_type = {chr(39)}volume{chr(39)} AND {TOPIC_F} AND baseline IS NOT NULL')} ORDER BY 1",
              "short", "Messages per second per window against the mean of recent healthy windows."),
     panel(5, "Status timeline (all checks for selected topic/fields)", "state-timeline", 0, 16, 24, 8, [target(
         f"""SELECT window_start AS {T}, check_type || CASE WHEN field = '' THEN '' ELSE '.' || field END AS metric, {STATUS_N} AS status

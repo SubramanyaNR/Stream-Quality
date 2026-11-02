@@ -41,7 +41,7 @@ services:
       PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:-admin}
       PGDATABASE: sq
     entrypoint: ["/bin/sh", "-c"]
-    command: ["while true; do psql -tAc \"SELECT sq.purge_old(${RESULTS_RETENTION_DAYS:-90}, ${HEARTBEAT_RETENTION_DAYS:-14})\"; sleep 3600; done"]
+    command: ["while true; do psql -tAc \"SELECT sq.purge_old(${RESULTS_RETENTION_DAYS:-30}, ${HEARTBEAT_RETENTION_DAYS:-14})\"; sleep 3600; done"]
     restart: unless-stopped
     networks: [sq]
 

@@ -197,7 +197,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT window_start AS \"time\", field || ' baseline' AS metric, (details->>'baseline')::float8 AS baseline FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'cardinality' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) AND details->>'baseline' IS NOT NULL ORDER BY 1"
+          "rawSql": "SELECT window_start AS \"time\", field || ' baseline' AS metric, baseline FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'cardinality' AND topic IN (${topic:singlequote}) AND field IN (${field:singlequote}) AND baseline IS NOT NULL ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -261,7 +261,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT * FROM (SELECT window_start AS \"time\", 'p50' AS metric, (details->>'p50_ms')::float8 AS ms FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p95', value FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p99', (details->>'p99_ms')::float8 FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote})) u ORDER BY 1"
+          "rawSql": "SELECT * FROM (SELECT window_start AS \"time\", 'p50' AS metric, p50_ms AS ms FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p95', value FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote}) UNION ALL SELECT window_start, 'p99', p99_ms FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'freshness' AND topic IN (${topic:singlequote})) u ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -313,7 +313,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT window_start AS \"time\", topic || ' baseline' AS metric, (details->>'baseline_rate')::float8 AS baseline FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'volume' AND topic IN (${topic:singlequote}) AND details->>'baseline_rate' IS NOT NULL ORDER BY 1"
+          "rawSql": "SELECT window_start AS \"time\", topic || ' baseline' AS metric, baseline FROM sq.check_results WHERE $__timeFilter(window_start) AND check_type = 'volume' AND topic IN (${topic:singlequote}) AND baseline IS NOT NULL ORDER BY 1"
         }
       ],
       "fieldConfig": {
