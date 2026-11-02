@@ -92,6 +92,7 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
 
         List<String> fieldNames = thresholds.fields(r.topic());
         Map<String, String> fields = new HashMap<>();
+        Map<String, String> types = new HashMap<>();
         StringBuilder missingRequired = null;
         for (String f : fieldNames) {
             JsonNode v = path(root, f);
@@ -102,7 +103,13 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
                 }
             } else {
                 fields.put(f, v.isValueNode() ? v.asText() : v.toString());
+                types.put(f, typeTag(v));
             }
+        }
+        List<String> keys = null;
+        if (thresholds.schemaDriftEnabled(r.topic())) {
+            keys = new java.util.ArrayList<>();
+            root.fieldNames().forEachRemaining(keys::add);
         }
         byte structural = ParsedRecord.STRUCT_SKIPPED;
         String structuralError = null;
@@ -115,9 +122,16 @@ public final class ParseFn extends ProcessFunction<RawRecord, ParsedRecord> {
             if (v.state() == SchemaProvider.State.VALID) structural = ParsedRecord.STRUCT_VALID;
             else if (v.state() == SchemaProvider.State.INVALID) { structural = ParsedRecord.STRUCT_INVALID; structuralError = trunc(v.error()); }
         }
-        out.collect(new ParsedRecord(r.topic(), r.partition(), r.offset(), eventTime, fromPayload, now, false, fields, structural, structuralError, false));
+        out.collect(new ParsedRecord(r.topic(), r.partition(), r.offset(), eventTime, fromPayload, now, false, fields, structural, structuralError, false, types, keys));
         if (structural == ParsedRecord.STRUCT_INVALID) dlq(ctx, r, DlqRecord.SCHEMA_VIOLATION, structuralError);
         if (missingRequired != null) dlq(ctx, r, DlqRecord.REQUIRED_FIELD_MISSING, missingRequired.toString());
+    }
+
+    static String typeTag(JsonNode v) {
+        if (v.isTextual()) return "string";
+        if (v.isNumber()) return "number";
+        if (v.isBoolean()) return "boolean";
+        return v.isArray() ? "array" : "object";
     }
 
     static JsonNode path(JsonNode root, String dotted) {

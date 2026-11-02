@@ -4,6 +4,8 @@ import io.streamquality.checks.CardinalityCheck;
 import io.streamquality.checks.FreshnessCheck;
 import io.streamquality.checks.NullRateCheck;
 import io.streamquality.checks.StructuralCheck;
+import io.streamquality.checks.TypeDriftCheck;
+import io.streamquality.checks.SchemaDriftCheck;
 import io.streamquality.checks.QualityCheck;
 import io.streamquality.checks.VolumeCheck;
 import io.streamquality.config.ConfigLoader;
@@ -20,6 +22,7 @@ import io.streamquality.source.KafkaPreflight;
 import io.streamquality.source.TopicSelector;
 import io.streamquality.source.RawRecordDeserializer;
 import io.streamquality.source.TickFn;
+import io.streamquality.source.TopicDiscovery;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -141,13 +144,19 @@ public final class StreamQualityJob {
 
         // ---- ticks keep watermarks moving and force empty windows (see TickFn) ----
         long tickMs = params.getLong("tick.interval.ms", 1000);
+        // Pattern topics: discover them so a silent one still gets empty-window (volume=0) detection.
+        TopicDiscovery discovery = topicPattern.isEmpty() ? null : TopicDiscovery.kafka(kafkaClient,
+                TopicSelector.pattern(topicPattern, kafkaAll.getProperty("sq.source.topic.exclude", ""), dlqTopic),
+                Integer.parseInt(kafkaAll.getProperty("sq.discovery.max.topics", "500")));
+        long discoveryMs = Long.parseLong(kafkaAll.getProperty("sq.discovery.interval.ms", "60000"));
         DataGeneratorSource<Long> tickSrc = new DataGeneratorSource<>(i -> i, Long.MAX_VALUE,
                 RateLimiterStrategy.perSecond(1000.0 / tickMs), Types.LONG);
         DataStream<ParsedRecord> ticks = env.fromSource(tickSrc, WatermarkStrategy.noWatermarks(), "tick-source")
-                .setParallelism(1).flatMap(new TickFn(monitored)).name("ticks").setParallelism(1);
+                .setParallelism(1).flatMap(new TickFn(monitored, discovery, discoveryMs)).name("ticks").setParallelism(1);
 
         // ---- windowed checks ----
-        List<QualityCheck<?>> checks = List.of(new VolumeCheck(), new NullRateCheck(), new CardinalityCheck(th), new FreshnessCheck(), new StructuralCheck());
+        List<QualityCheck<?>> checks = List.of(new VolumeCheck(), new NullRateCheck(), new CardinalityCheck(th), new FreshnessCheck(), new StructuralCheck(),
+                new TypeDriftCheck(), new SchemaDriftCheck());
         OutputTag<ParsedRecord> late = new OutputTag<>("late") {};
         SingleOutputStreamOperator<DbRow> results = parsed.union(ticks)
                 .assignTimestampsAndWatermarks(WatermarkStrategy

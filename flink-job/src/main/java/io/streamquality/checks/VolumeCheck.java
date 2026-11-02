@@ -10,8 +10,8 @@ import java.util.Locale;
 /**
  * Messages/second per topic. Status:
  *  - FAIL when the window is empty and fail_on_zero (default true)
- *  - else WARN/FAIL when rate dropped more than warn_drop_pct/fail_drop_pct vs the mean of the last
- *    N windows (needs min_history windows, default 5; otherwise OK while warming up)
+ *  - else WARN/FAIL when rate dropped more than warn_drop_pct/fail_drop_pct vs the baseline: the same hour of previous
+ *    days/weeks when volume.seasonality is daily/weekly and history exists, else the mean of the last N windows (needs min_history windows, default 5; otherwise OK while warming up)
  */
 public final class VolumeCheck implements QualityCheck<VolumeCheck.Acc> {
     public static final String NAME = "volume";
@@ -38,8 +38,10 @@ public final class VolumeCheck implements QualityCheck<VolumeCheck.Acc> {
         boolean failOnZero = th.bool(t, NAME, "fail_on_zero", true);
 
         double[] hist = ctx.history().recent(CheckType.VOLUME, "");
-        double baseline = History.mean(hist);
-        boolean warm = hist.length >= minHistory;
+        double[] seas = ctx.history().seasonal(CheckType.VOLUME, "");
+        boolean seasonal = seas.length >= (int) th.num(t, null, NAME, "seasonal_min_cycles", 1);
+        double baseline = History.mean(seasonal ? seas : hist);   // same hour of previous days when we have it, else the last N windows
+        boolean warm = seasonal || hist.length >= minHistory;
         double dropPct = warm && baseline > 0 ? (baseline - rate) / baseline * 100.0 : 0.0;
 
         Status status = Status.OK;
@@ -53,9 +55,9 @@ public final class VolumeCheck implements QualityCheck<VolumeCheck.Acc> {
             else if (status == Status.WARN) threshold = baseline * (1 - warnDrop / 100.0);
         }
         String details = String.format(Locale.ROOT,
-                "{\"count\":%d,\"window_sec\":%.1f,\"baseline_rate\":%s,\"drop_pct\":%.2f,\"history_windows\":%d,\"warming_up\":%s}",
+                "{\"count\":%d,\"window_sec\":%.1f,\"baseline_rate\":%s,\"drop_pct\":%.2f,\"history_windows\":%d,\"warming_up\":%s,\"baseline_source\":\"%s\"}",
                 acc.count, sec, Double.isNaN(baseline) ? "null" : String.format(Locale.ROOT, "%.4f", baseline),
-                dropPct, hist.length, !warm);
+                dropPct, hist.length, !warm, seasonal ? "seasonal" : "recent");
         return List.of(CheckResult.of(t, "", CheckType.VOLUME, ctx.windowStartMs(), ctx.windowEndMs(), rate, threshold, status, details));
     }
 }

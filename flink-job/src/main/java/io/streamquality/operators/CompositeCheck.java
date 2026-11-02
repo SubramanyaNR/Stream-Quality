@@ -3,6 +3,8 @@ package io.streamquality.operators;
 import io.streamquality.checks.History;
 import io.streamquality.checks.HistoryPolicy;
 import io.streamquality.checks.QualityCheck;
+import io.streamquality.checks.SeasonalBaseline;
+import io.streamquality.model.Status;
 import io.streamquality.checks.WindowContext;
 import io.streamquality.config.Thresholds;
 import io.streamquality.model.CheckResult;
@@ -97,21 +99,51 @@ public final class CompositeCheck {
             g.set(r.status().ordinal());
         }
 
+        static String seasonKey(long ws, long period) { return "volume|" + SeasonalBaseline.slot(ws, period); }
+
+        private static void append(MapState<String, List<Double>> hist, String key, double v, int keep) throws Exception {
+            List<Double> l = hist.get(key);
+            if (l == null) l = new ArrayList<>();
+            l.add(v);
+            while (l.size() > keep) l.remove(0);
+            hist.put(key, l);
+        }
+
         @Override
         public void process(String topic, Context ctx, Iterable<Acc> elements, Collector<DbRow> out) throws Exception {
             Acc acc = elements.iterator().next();
             MapState<String, List<Double>> hist =
                     ctx.globalState().getMapState(new MapStateDescriptor<>("history", Types.STRING, Types.LIST(Types.DOUBLE)));
-            History view = (type, field) -> {
-                try {
-                    List<Double> l = hist.get(type.wire() + "|" + field);
-                    if (l == null) return new double[0];
-                    double[] d = new double[l.size()];
-                    for (int i = 0; i < d.length; i++) d[i] = l.get(i);
-                    return d;
-                } catch (Exception e) { throw new RuntimeException(e); }
-            };
+            MapState<String, List<Double>> seasonal =
+                    ctx.globalState().getMapState(new MapStateDescriptor<>("seasonal", Types.STRING, Types.LIST(Types.DOUBLE)));
             long ws = ctx.window().getStart(), we = ctx.window().getEnd();
+            String seasonMode = thresholds.str(topic, "volume", "seasonality", "none");
+            long period = SeasonalBaseline.periodMs(seasonMode);
+            History view = new History() {
+                public double[] recent(CheckType type, String field) {
+                    try {
+                        List<Double> l = hist.get(type.wire() + "|" + field);
+                        if (l == null) return new double[0];
+                        double[] d = new double[l.size()];
+                        for (int i = 0; i < d.length; i++) d[i] = l.get(i);
+                        return d;
+                    } catch (Exception e) { throw new RuntimeException(e); }
+                }
+                public double[] seasonal(CheckType type, String field) {
+                    if (type != CheckType.VOLUME || period == 0) return new double[0];
+                    try {
+                        return SeasonalBaseline.priorMeans(seasonal.get(seasonKey(ws, period)), SeasonalBaseline.cycle(ws, period));
+                    } catch (Exception e) { throw new RuntimeException(e); }
+                }
+                public java.util.Set<String> fieldsOf(CheckType type) {
+                    try {
+                        java.util.Set<String> out = new java.util.HashSet<>();
+                        String p = type.wire() + "|";
+                        for (String k : hist.keys()) if (k.startsWith(p)) out.add(k.substring(p.length()));
+                        return out;
+                    } catch (Exception e) { throw new RuntimeException(e); }
+                }
+            };
             WindowContext wc = new WindowContext() {
                 public String topic() { return topic; }
                 public long windowStartMs() { return ws; }
@@ -120,7 +152,17 @@ public final class CompositeCheck {
                 public History history() { return view; }
             };
             List<CheckResult> results = new ArrayList<>();
-            for (QualityCheck c : checks) results.addAll(c.evaluate((Serializable) acc.accs.get(c.name()), wc));
+            java.util.Map<String, Status> worst = new HashMap<>();
+            java.util.Map<String, java.util.Map<String, Double>> extras = new HashMap<>();
+            for (QualityCheck c : checks) {
+                Serializable a = (Serializable) acc.accs.get(c.name());
+                List<CheckResult> mine = c.evaluate(a, wc);
+                results.addAll(mine);
+                Status w = Status.OK;
+                for (CheckResult r : mine) if (r.status().ordinal() > w.ordinal()) w = r.status();
+                java.util.Map<String, Double> ex = c.extraSamples(a, wc);
+                if (!ex.isEmpty()) { worst.put(c.name(), w); extras.put(c.name(), ex); }
+            }
             // Update history AFTER evaluating, so a window is never its own baseline. Anomalous windows are not
             // learned from (see HistoryPolicy), unless the anomaly persists long enough to be the new normal.
             MapState<String, Integer> streaks =
@@ -134,11 +176,23 @@ public final class CompositeCheck {
                 int streak = HistoryPolicy.nextStreak(r.status(), prev == null ? 0 : prev);
                 streaks.put(key, streak);
                 if (!HistoryPolicy.shouldRecord(r.status(), streak, rebaselineAfter)) continue;
-                List<Double> l = hist.get(key);
-                if (l == null) l = new ArrayList<>();
-                l.add(r.value());
-                while (l.size() > keep) l.remove(0);
-                hist.put(key, l);
+                append(hist, key, r.sample(), keep);
+                if (r.checkType() == CheckType.VOLUME && period != 0) {
+                    String sk = seasonKey(ws, period);
+                    List<Double> l = seasonal.get(sk);
+                    if (l == null) l = new ArrayList<>();
+                    SeasonalBaseline.record(l, SeasonalBaseline.cycle(ws, period), r.value(), SeasonalBaseline.keepCycles(seasonMode));
+                    seasonal.put(sk, l);
+                }
+            }
+            for (var e : extras.entrySet()) {          // per-field baseline samples a check learns without emitting a row for them
+                String sk = "extra|" + e.getKey();
+                Integer prev = streaks.get(sk);
+                Status w = worst.get(e.getKey());
+                int streak = HistoryPolicy.nextStreak(w, prev == null ? 0 : prev);
+                streaks.put(sk, streak);
+                if (!HistoryPolicy.shouldRecord(w, streak, rebaselineAfter)) continue;
+                for (var s : e.getValue().entrySet()) append(hist, s.getKey(), s.getValue(), keep);
             }
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (CheckResult r : results) { seen.add(statusKey(r)); publishStatus(r); out.collect(ResultMapper.toRow(r, jobId)); }

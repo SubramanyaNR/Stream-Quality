@@ -12,11 +12,20 @@ public record CheckResult(
         double value,
         double threshold,
         Status status,
-        String detailsJson) implements Serializable {
+        String detailsJson,
+        double historyValue) implements Serializable {
 
     public static CheckResult of(String topic, String field, CheckType type, long ws, long we,
                                  double value, double threshold, Status status, String details) {
-        return new CheckResult(topic, field == null ? "" : field, type, ws, we, value, threshold, status,
-                details == null ? "{}" : details);
+        return of(topic, field, type, ws, we, value, threshold, status, details, Double.NaN);
     }
+
+    /** historyValue: what to remember as this window's baseline sample (NaN = use value). */
+    public static CheckResult of(String topic, String field, CheckType type, long ws, long we,
+                                 double value, double threshold, Status status, String details, double historyValue) {
+        return new CheckResult(topic, field == null ? "" : field, type, ws, we, value, threshold, status,
+                details == null ? "{}" : details, historyValue);
+    }
+
+    public double sample() { return Double.isNaN(historyValue) ? value : historyValue; }
 }

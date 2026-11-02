@@ -30,4 +30,10 @@ public interface QualityCheck<ACC extends Serializable> extends Serializable {
     ACC merge(ACC a, ACC b);
 
     List<CheckResult> evaluate(ACC acc, WindowContext ctx);
+
+    /**
+     * Additional baseline samples to remember (field -> value, stored under this check's history), recorded only when
+     * the window is healthy (see HistoryPolicy). Lets a check learn per-field facts it does not emit a row for.
+     */
+    default java.util.Map<String, Double> extraSamples(ACC acc, WindowContext ctx) { return java.util.Map.of(); }
 }

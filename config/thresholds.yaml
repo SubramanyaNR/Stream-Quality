@@ -15,6 +15,15 @@ defaults:
   # factor = max(est/baseline, baseline/est) vs mean of last history_windows windows; either direction
   cardinality: { warn_ratio: 2.0, fail_ratio: 5.0, min_history: 5, min_baseline: 10 }
   freshness:   { warn_p95_ms: 30000, fail_p95_ms: 120000 }
+  # seasonality: none | daily | weekly. daily compares with the SAME HOUR of previous days (needs one full day of
+  # history; until then the last history_windows windows are used), so a normal overnight dip is not an alarm.
+  # fail_on_zero still fires on an empty window; set it false for topics that are legitimately silent at night.
+  # (add `seasonality: daily` to a topic or to defaults.volume to switch it on)
+  # type_drift: share of values NOT of the field's usual JSON type (string/number/boolean/object/array; nulls ignored)
+  type_drift:  { warn: 0.01, fail: 0.10, min_history: 5 }
+  # schema_drift: top-level fields that appear (>= appear_min_rate of records) or vanish (< disappear_below) vs the
+  # learned field set; value = number of drifted fields. enabled: false switches it off for a topic.
+  schema_drift: { warn: 0, fail: 3, min_history: 5, min_presence: 0.5, appear_min_rate: 0.05, disappear_below: 0.01 }
 
 topics:
   bank.dbo.transactions:

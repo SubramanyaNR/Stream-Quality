@@ -1,6 +1,7 @@
 package io.streamquality.model;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -8,6 +9,8 @@ import java.util.Map;
  * fields: only monitored fields; an ABSENT key means missing or JSON null.
  * undecoded: the record exists (counted by volume) but could not be read (e.g. Avro while the registry is down): field-level
  *            checks must ignore it, otherwise every field would look 100% null.
+ * types: JSON type tag (string|number|boolean|object|array) of each monitored non-null field; feeds the type-drift check.
+ * keys: all top-level keys of the payload (null = not collected); feeds the schema-drift check.
  * synthetic: a tick injected to advance watermarks / force empty windows; never counted as data.
  */
 public record ParsedRecord(
@@ -21,11 +24,20 @@ public record ParsedRecord(
         Map<String, String> fields,
         byte structural,
         String structuralError,
-        boolean undecoded) implements Serializable {
+        boolean undecoded,
+        Map<String, String> types,
+        List<String> keys) implements Serializable {
 
     public static final byte STRUCT_SKIPPED = 0;   // not checked (registry off/down, or no schema for the topic)
     public static final byte STRUCT_VALID = 1;
     public static final byte STRUCT_INVALID = 2;
+
+    public ParsedRecord(String topic, int partition, long offset, long eventTimeMs, boolean eventTimeFromPayload,
+                        long processingTimeMs, boolean synthetic, Map<String, String> fields, byte structural,
+                        String structuralError, boolean undecoded) {
+        this(topic, partition, offset, eventTimeMs, eventTimeFromPayload, processingTimeMs, synthetic, fields, structural,
+                structuralError, undecoded, Map.of(), null);
+    }
 
     public ParsedRecord(String topic, int partition, long offset, long eventTimeMs, boolean eventTimeFromPayload,
                         long processingTimeMs, boolean synthetic, Map<String, String> fields) {

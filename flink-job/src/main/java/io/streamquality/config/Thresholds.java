@@ -71,6 +71,15 @@ public final class Thresholds implements Serializable {
         return def;
     }
 
+    public String str(String topic, String check, String key, String def) {
+        JsonNode t = root().path("topics").path(topic).path(check).path(key);
+        if (t.isTextual()) return t.asText();
+        JsonNode d = root().path("defaults").path(check).path(key);
+        return d.isTextual() ? d.asText() : def;
+    }
+
+    public boolean schemaDriftEnabled(String topic) { return bool(topic, "schema_drift", "enabled", true); }
+
     public boolean bool(String topic, String check, String key, boolean def) {
         JsonNode t = root().path("topics").path(topic).path(check).path(key);
         if (t.isBoolean()) return t.asBoolean();

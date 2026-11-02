@@ -6,6 +6,12 @@ import io.streamquality.model.CheckType;
 public interface History {
     double[] recent(CheckType type, String field);
 
+    /** Per-cycle mean values for the slot (e.g. hour of day) this window falls in, from previous cycles only. */
+    default double[] seasonal(CheckType type, String field) { return new double[0]; }
+
+    /** Fields that have a recorded history for this check type (schema drift: the learned field set). */
+    default java.util.Set<String> fieldsOf(CheckType type) { return java.util.Set.of(); }
+
     History EMPTY = (t, f) -> new double[0];
 
     static double mean(double[] xs) {
