@@ -14,8 +14,26 @@ and the Flink job on an embedded Flink 2.2 mini-cluster.
 | Dashboards (39 queries, 4 dashboards) | `make test-dashboards` (`--strict` needs data: run bankgen in anomaly mode first) | every Grafana panel/variable query executes on Postgres as the read-only user (`--strict`: non-empty) |
 | Alert sink (21 assertions) | `make test-alert-sink` | webhook parsing, idempotent repeats, firing→resolved pairing, re-fire = new instance, 400 on bad JSON, **500 when the DB is down** (so Alertmanager retries), insert-only privileges |
 
-The old end-to-end scripts (`make e2e`, `e2e-outage`, `e2e-alerts`) were removed on 2026-10-08 with the generator.
-End-to-end checking is now manual: run bankgen with `DATA_MODE=anomaly` (see the README) and watch Grafana and `sq.check_results`.
+The old end-to-end scripts (`make e2e`, `e2e-outage`, `e2e-alerts`) were removed on 2026-10-08 with the generator. A new, much smaller
+end-to-end test replaces them: `make e2e` (`scripts/e2e.sh`) starts real Kafka, Postgres (with the shipped schema) and the job in compact mode
+via `docker-compose.e2e.yml`, drives a scripted scenario with a tiny test producer (`scripts/e2e_check.py`: healthy, 25% wrong-typed values, a new
+field, a vanished field, a silent pattern-matched topic, one invalid JSON record) and asserts 10 things in Postgres and the dead-letter topic.
+It needs Docker, a built jar and `psycopg2`; it takes about 5 minutes. CI (`.github/workflows/ci.yml`) runs unit + SQL tests and this e2e.
+Status: passed on the second run here; the first run failed one assertion ("no drift during the healthy phase") that I could not reproduce,
+so treat it as possibly timing-sensitive (the script now prints the offending rows if it recurs). The CI workflow itself has not been run on GitHub.
+
+## Verified 2026-11-02 (new work), against real Kafka/Postgres/Prometheus
+- Type drift: 25% wrong-typed values -> FAIL (0.208, 0.198), no registry. Schema drift: appearing and vanishing field flagged.
+- Silence on a regex-matched topic that is not in `thresholds.yaml`: volume FAIL produced.
+- Consumer lag: job frozen while 60k records were produced -> `QualityMonitorLagging` and `QualityMonitorBehind` fired in Prometheus
+  (thresholds temporarily lowered for the test; the shipped rule expressions and metric names were the ones exercised).
+- Storage on 500k synthetic rows: 353 -> 231 bytes/row (heap 109 -> 57 MB, indexes 60 -> 54 MB). The primary-key index now dominates; a further
+  big cut would need a normalised series table (not done). Default retention is now 30 days.
+- Memory (embedded job, 1,000 msg/s, 5 topics' worth of checks): 435 MB peak RSS at -Xmx1g, 369 MB at -Xmx256m, 354 MB at -Xmx160m. In Docker the
+  compact container used about 250 MB (limit 512 MB). Flink JobManager+TaskManager containers were measured by the owner at ~1.3 GB.
+- Compact container restart: state restored from the retained checkpoint (first window after restart had its volume baseline).
+- NOT verified: the seasonal baseline on real multi-day data (unit tests only); the full `flink/Dockerfile` Maven stage (the prebuilt-jar image was
+  used); the cluster profile after the compose change; CI on GitHub.
 
 ## Bugs that only real components exposed (all fixed)
 - window by payload time dropped stale events (switched to ingestion time)

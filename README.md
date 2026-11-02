@@ -61,7 +61,7 @@ Topics matching the pattern are picked up within a minute of being created. Topi
 | UI | URL |
 |---|---|
 | Grafana (admin/admin) | http://localhost:3000 |
-| Flink | http://localhost:8082 |
+| Flink UI | cluster profile only: http://localhost:8082 |
 | Prometheus / Alertmanager | http://localhost:9090 / http://localhost:9093 |
 | PostgreSQL | localhost:5432, db `sq` (`sq_reader` / `sq_reader_pw`) |
 
@@ -110,3 +110,16 @@ make test-dashboards # runs every Grafana query against Postgres
 ## Security notes
 Demo credentials (`sq_writer_pw`, `admin/admin`) are for local use; change them in `postgres/init/01_init.sql` and `cluster.env`
 before exposing anything. Kafka secrets go in `cluster.env` and are referenced as `${env:NAME}` in `config/kafka.properties`.
+
+
+## What the checks cover (additions)
+- **type_drift** - JSON type mix per configured field; flags a wrong-typed share (default warn 1%, fail 10%) with no registry.
+- **schema_drift** - top-level fields that appear or vanish versus what the topic normally carries.
+- **Seasonal volume**: set `volume.seasonality: daily|weekly` to compare with the same hour of previous days/weeks.
+- **Silence detection** also covers topics matched by `TOPICS_PATTERN` (re-discovered every 60 s).
+- **Monitor health alerts**: `QualityMonitorLagging` / `QualityMonitorBehind` fire when the monitor's own consumer falls behind.
+
+## Run modes and footprint
+`COMPOSE_PROFILES=compact` (default in `cluster.env.example`) runs the job embedded in one JVM (~250-370 MB); `cluster` runs standalone Flink
+containers (~1.3 GB). Results use ~230 bytes/row; retention defaults to 30 days. Upgrade an existing database with `make migrate`.
+Tests: `make test`, `make e2e` (see docs/TESTING.md).
