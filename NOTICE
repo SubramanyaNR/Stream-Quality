@@ -1,0 +1,9 @@
+Stream Quality
+Copyright 2026 The Stream Quality authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It runs on, and bundles in its jar, third-party software under their own licenses, including Apache Flink, Apache Kafka
+clients, Apache Avro, Jackson, the PostgreSQL JDBC driver, Apache DataSketches, networknt json-schema-validator,
+Square Wire and Okio, and the Kotlin standard library. "Apache", "Apache Kafka", "Apache Flink" and related names are
+trademarks of the Apache Software Foundation; this project is not affiliated with or endorsed by it.

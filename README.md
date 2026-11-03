@@ -136,3 +136,6 @@ Class names inside Grafana can change between versions: the dashboards were chec
 `COMPOSE_PROFILES=compact` (default in `cluster.env.example`) runs the job embedded in one JVM (~250-370 MB); `cluster` runs standalone Flink
 containers (~1.3 GB). Results use ~230 bytes/row; retention defaults to 30 days. Upgrade an existing database with `make migrate`.
 Tests: `make test`, `make e2e` (see docs/TESTING.md).
+
+## License
+Apache License 2.0: see [LICENSE](LICENSE) and [NOTICE](NOTICE). Third-party components keep their own licenses.
