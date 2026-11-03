@@ -67,6 +67,27 @@
   ],
   "panels": [
     {
+      "id": 100,
+      "title": "",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 2
+      },
+      "targets": [],
+      "transparent": true,
+      "options": {
+        "mode": "html",
+        "content": "<style>\nbody{background:#F5F2FF!important}\nsection[data-testid^=\"data-testid Panel header\"]{background:#fff!important;border:1px solid #E8E2FB!important;border-radius:16px!important;\n  box-shadow:0 1px 2px rgba(76,29,149,.05),0 10px 30px rgba(124,92,252,.08)!important;overflow:hidden}\nsection[data-testid^=\"data-testid Panel header\"] h2{font-weight:600!important;letter-spacing:.01em;color:#2B2350!important}\nsection[data-testid=\"data-testid Panel header \"]{background:transparent!important;border:0!important;box-shadow:none!important}\n.sqhero{display:flex;align-items:center;gap:16px;padding:6px 6px 0}\n.sqhero .logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#9B8AFF,#6D4AFF);display:grid;place-items:center;\n  color:#fff;font-weight:700;font-size:20px;box-shadow:0 8px 20px rgba(109,74,255,.35)}\n.sqhero h1{margin:0;font-size:24px;line-height:1.1;color:#2B2350;font-weight:700;letter-spacing:-.01em}\n.sqhero p{margin:3px 0 0;color:#6E6890;font-size:13px}\n.sqhero .key{margin-left:auto;display:flex;gap:14px;font-size:12px;color:#6E6890}\n.sqhero .key i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}\na[data-testid^=\"data-testid Dashboard link\"], .sq-nav a{border-radius:999px!important}\nfooter, [class*=\"footer\"]{display:none!important}\n[data-testid=\"data-testid navigation mega-menu\"]{display:none!important}\nmain[class*=\"page-container\"]{padding-left:0!important}\nsection[data-testid^=\"data-testid Panel header\"] h2{font-size:13px!important}\nheader, [data-testid=\"data-testid Nav toolbar\"], [data-testid=\"data-testid dashboard controls\"]{background:#F5F2FF!important;border-color:#E8E2FB!important}\n[data-testid=\"data-testid Dashboard link container\"] a, [data-testid=\"data-testid Dashboard link\"]{border-radius:999px!important;background:#fff!important;\n  border:1px solid #D9CFFB!important;color:#5B3FD1!important}\nsection[data-testid^=\"data-testid Panel header\"] a{color:#6D4AFF!important}\nsection[data-testid^=\"data-testid Panel header\"] [role=\"columnheader\"]{color:#6E6890!important;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.06em;background:#FAF8FF!important}\n</style><div class=\"sqhero\"><div class=\"logo\">SQ</div><div><h1>Stream Quality</h1><p>Data-quality score, availability, incidents, flapping checks and week-over-week trends computed with SQL.</p></div>\n<div class=\"key\"><span><i style=\"background:#1FA971\"></i>OK</span><span><i style=\"background:#F0A33A\"></i>Warn</span><span><i style=\"background:#E5484D\"></i>Fail</span></div></div>"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
       "id": 1,
       "title": "Data-quality score",
       "type": "stat",
@@ -77,7 +98,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 2,
         "w": 4,
         "h": 4
       },
@@ -96,21 +117,24 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percent",
           "decimals": 2,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#E5484D",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#F0A33A",
                 "value": 95
               },
               {
-                "color": "green",
+                "color": "#1FA971",
                 "value": 99
               }
             ]
@@ -118,7 +142,19 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 2,
@@ -131,7 +167,7 @@
       },
       "gridPos": {
         "x": 4,
-        "y": 0,
+        "y": 2,
         "w": 4,
         "h": 4
       },
@@ -150,21 +186,24 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "percent",
           "decimals": 2,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#E5484D",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#F0A33A",
                 "value": 95
               },
               {
-                "color": "green",
+                "color": "#1FA971",
                 "value": 99
               }
             ]
@@ -172,7 +211,19 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 3,
@@ -185,7 +236,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 0,
+        "y": 2,
         "w": 4,
         "h": 4
       },
@@ -204,19 +255,22 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#7C5CFC",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#F0A33A",
                 "value": 1
               },
               {
-                "color": "red",
+                "color": "#E5484D",
                 "value": 3
               }
             ]
@@ -224,7 +278,19 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 4,
@@ -237,7 +303,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 2,
         "w": 4,
         "h": 4
       },
@@ -256,15 +322,18 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#1FA971",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#F0A33A",
                 "value": 1
               }
             ]
@@ -272,7 +341,19 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 5,
@@ -285,7 +366,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 0,
+        "y": 2,
         "w": 4,
         "h": 4
       },
@@ -304,11 +385,26 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "s"
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 6,
@@ -321,7 +417,7 @@
       },
       "gridPos": {
         "x": 20,
-        "y": 0,
+        "y": 2,
         "w": 4,
         "h": 4
       },
@@ -340,11 +436,26 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "s"
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 7,
@@ -357,7 +468,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 6,
         "w": 12,
         "h": 9
       },
@@ -386,8 +497,9 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
-                  "mode": "basic"
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
                 }
               },
               {
@@ -395,20 +507,34 @@
                 "value": "percent"
               },
               {
+                "id": "min",
+                "value": 80
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red",
+                      "color": "#E5484D",
                       "value": null
                     },
                     {
-                      "color": "orange",
+                      "color": "#F0A33A",
                       "value": 95
                     },
                     {
-                      "color": "green",
+                      "color": "#1FA971",
                       "value": 99
                     }
                   ]
@@ -431,7 +557,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 6,
         "w": 12,
         "h": 9
       },
@@ -450,13 +576,20 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
+          "color": {
+            "mode": "shades",
+            "fixedColor": "#7C5CFC"
+          },
           "custom": {
             "lineWidth": 2,
-            "fillOpacity": 8
-          }
+            "fillOpacity": 14,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
         },
         "overrides": []
       },
@@ -473,7 +606,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 15,
         "w": 14,
         "h": 10
       },
@@ -519,12 +652,12 @@
                     "options": {
                       "fail": {
                         "text": "FAIL",
-                        "color": "red",
+                        "color": "#E5484D",
                         "index": 0
                       },
                       "warn": {
                         "text": "WARN",
-                        "color": "orange",
+                        "color": "#F0A33A",
                         "index": 1
                       }
                     }
@@ -554,7 +687,7 @@
       },
       "gridPos": {
         "x": 14,
-        "y": 13,
+        "y": 15,
         "w": 10,
         "h": 10
       },
@@ -578,10 +711,118 @@
             "stacking": {
               "mode": "normal"
             },
-            "fillOpacity": 70
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "barAlignment": 0
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "volume"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#7C5CFC"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "null_rate"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#06A59B"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cardinality"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#2F6FDE"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "freshness"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E11D8F"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "structural"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9B8AE8"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "type_drift"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0E7490"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "schema_drift"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B45FD0"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {}
     },
@@ -596,7 +837,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 25,
         "w": 8,
         "h": 9
       },
@@ -630,7 +871,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 23,
+        "y": 25,
         "w": 8,
         "h": 9
       },
@@ -664,7 +905,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 23,
+        "y": 25,
         "w": 8,
         "h": 9
       },
@@ -698,7 +939,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 34,
         "w": 24,
         "h": 8
       },
@@ -728,26 +969,68 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "color": {
+            "mode": "shades",
+            "fixedColor": "#7C5CFC"
+          },
           "custom": {
             "lineWidth": 2,
-            "fillOpacity": 10,
+            "fillOpacity": 14,
+            "gradientMode": "opacity",
+            "showPoints": "never",
             "spanNulls": false
-          }
+          },
+          "unit": "short"
         },
         "overrides": [
           {
             "matcher": {
-              "id": "byFrameRefID",
-              "options": "B"
+              "id": "byRegexp",
+              "options": ".*(baseline|7d ago)$"
             },
             "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B7ADDF"
+                }
+              },
               {
                 "id": "custom.lineStyle",
                 "value": {
                   "fill": "dash",
                   "dash": [
-                    8,
+                    6,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* threshold$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E5484D"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
                     6
                   ]
                 }
@@ -773,7 +1056,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 42,
         "w": 16,
         "h": 9
       },
@@ -807,12 +1090,12 @@
                     "options": {
                       "FIRING": {
                         "text": "FIRING",
-                        "color": "red",
+                        "color": "#E5484D",
                         "index": 0
                       },
                       "resolved": {
                         "text": "resolved",
-                        "color": "green",
+                        "color": "#1FA971",
                         "index": 1
                       }
                     }
@@ -854,7 +1137,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 40,
+        "y": 42,
         "w": 8,
         "h": 9
       },
@@ -878,10 +1161,43 @@
             "stacking": {
               "mode": "normal"
             },
-            "fillOpacity": 70
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "barAlignment": 0
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "critical"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E5484D"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "warning"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F0A33A"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {}
     }

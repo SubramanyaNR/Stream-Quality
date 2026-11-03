@@ -169,6 +169,10 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/topic-health.json
+      GF_USERS_DEFAULT_THEME: light                    # the dashboards are designed for the light theme (white cards on lavender)
+      # Lets the provisioned header panel carry the stylesheet. Dashboards are provisioned, but anyone who can EDIT a dashboard
+      # could then add scripts: keep Grafana off the public internet and give people viewer accounts.
+      GF_PANELS_DISABLE_SANITIZE_HTML: "true"
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro

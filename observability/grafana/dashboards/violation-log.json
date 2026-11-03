@@ -107,6 +107,27 @@
   ],
   "panels": [
     {
+      "id": 100,
+      "title": "",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 2
+      },
+      "targets": [],
+      "transparent": true,
+      "options": {
+        "mode": "html",
+        "content": "<style>\nbody{background:#F5F2FF!important}\nsection[data-testid^=\"data-testid Panel header\"]{background:#fff!important;border:1px solid #E8E2FB!important;border-radius:16px!important;\n  box-shadow:0 1px 2px rgba(76,29,149,.05),0 10px 30px rgba(124,92,252,.08)!important;overflow:hidden}\nsection[data-testid^=\"data-testid Panel header\"] h2{font-weight:600!important;letter-spacing:.01em;color:#2B2350!important}\nsection[data-testid=\"data-testid Panel header \"]{background:transparent!important;border:0!important;box-shadow:none!important}\n.sqhero{display:flex;align-items:center;gap:16px;padding:6px 6px 0}\n.sqhero .logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#9B8AFF,#6D4AFF);display:grid;place-items:center;\n  color:#fff;font-weight:700;font-size:20px;box-shadow:0 8px 20px rgba(109,74,255,.35)}\n.sqhero h1{margin:0;font-size:24px;line-height:1.1;color:#2B2350;font-weight:700;letter-spacing:-.01em}\n.sqhero p{margin:3px 0 0;color:#6E6890;font-size:13px}\n.sqhero .key{margin-left:auto;display:flex;gap:14px;font-size:12px;color:#6E6890}\n.sqhero .key i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}\na[data-testid^=\"data-testid Dashboard link\"], .sq-nav a{border-radius:999px!important}\nfooter, [class*=\"footer\"]{display:none!important}\n[data-testid=\"data-testid navigation mega-menu\"]{display:none!important}\nmain[class*=\"page-container\"]{padding-left:0!important}\nsection[data-testid^=\"data-testid Panel header\"] h2{font-size:13px!important}\nheader, [data-testid=\"data-testid Nav toolbar\"], [data-testid=\"data-testid dashboard controls\"]{background:#F5F2FF!important;border-color:#E8E2FB!important}\n[data-testid=\"data-testid Dashboard link container\"] a, [data-testid=\"data-testid Dashboard link\"]{border-radius:999px!important;background:#fff!important;\n  border:1px solid #D9CFFB!important;color:#5B3FD1!important}\nsection[data-testid^=\"data-testid Panel header\"] a{color:#6D4AFF!important}\nsection[data-testid^=\"data-testid Panel header\"] [role=\"columnheader\"]{color:#6E6890!important;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.06em;background:#FAF8FF!important}\n</style><div class=\"sqhero\"><div class=\"logo\">SQ</div><div><h1>Stream Quality</h1><p>Raw audit trail of every warn/fail with filters, plus delivered alert notifications.</p></div>\n<div class=\"key\"><span><i style=\"background:#1FA971\"></i>OK</span><span><i style=\"background:#F0A33A\"></i>Warn</span><span><i style=\"background:#E5484D\"></i>Fail</span></div></div>"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
       "id": 1,
       "title": "Violation audit log",
       "type": "table",
@@ -117,7 +138,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 2,
         "w": 24,
         "h": 14
       },
@@ -155,12 +176,12 @@
                     "options": {
                       "fail": {
                         "text": "FAIL",
-                        "color": "red",
+                        "color": "#E5484D",
                         "index": 0
                       },
                       "warn": {
                         "text": "WARN",
-                        "color": "orange",
+                        "color": "#F0A33A",
                         "index": 1
                       }
                     }
@@ -202,7 +223,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 14,
+        "y": 16,
         "w": 12,
         "h": 7
       },
@@ -226,7 +247,9 @@
             "stacking": {
               "mode": "normal"
             },
-            "fillOpacity": 70
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "barAlignment": 0
           }
         },
         "overrides": [
@@ -240,7 +263,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "red"
+                  "fixedColor": "#E5484D"
                 }
               }
             ]
@@ -255,7 +278,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "orange"
+                  "fixedColor": "#F0A33A"
                 }
               }
             ]
@@ -275,7 +298,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 14,
+        "y": 16,
         "w": 12,
         "h": 7
       },
@@ -309,7 +332,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 23,
         "w": 24,
         "h": 9
       },
@@ -343,12 +366,12 @@
                     "options": {
                       "FIRING": {
                         "text": "FIRING",
-                        "color": "red",
+                        "color": "#E5484D",
                         "index": 0
                       },
                       "resolved": {
                         "text": "resolved",
-                        "color": "green",
+                        "color": "#1FA971",
                         "index": 1
                       }
                     }

@@ -46,6 +46,27 @@
   ],
   "panels": [
     {
+      "id": 100,
+      "title": "",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 2
+      },
+      "targets": [],
+      "transparent": true,
+      "options": {
+        "mode": "html",
+        "content": "<style>\nbody{background:#F5F2FF!important}\nsection[data-testid^=\"data-testid Panel header\"]{background:#fff!important;border:1px solid #E8E2FB!important;border-radius:16px!important;\n  box-shadow:0 1px 2px rgba(76,29,149,.05),0 10px 30px rgba(124,92,252,.08)!important;overflow:hidden}\nsection[data-testid^=\"data-testid Panel header\"] h2{font-weight:600!important;letter-spacing:.01em;color:#2B2350!important}\nsection[data-testid=\"data-testid Panel header \"]{background:transparent!important;border:0!important;box-shadow:none!important}\n.sqhero{display:flex;align-items:center;gap:16px;padding:6px 6px 0}\n.sqhero .logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#9B8AFF,#6D4AFF);display:grid;place-items:center;\n  color:#fff;font-weight:700;font-size:20px;box-shadow:0 8px 20px rgba(109,74,255,.35)}\n.sqhero h1{margin:0;font-size:24px;line-height:1.1;color:#2B2350;font-weight:700;letter-spacing:-.01em}\n.sqhero p{margin:3px 0 0;color:#6E6890;font-size:13px}\n.sqhero .key{margin-left:auto;display:flex;gap:14px;font-size:12px;color:#6E6890}\n.sqhero .key i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}\na[data-testid^=\"data-testid Dashboard link\"], .sq-nav a{border-radius:999px!important}\nfooter, [class*=\"footer\"]{display:none!important}\n[data-testid=\"data-testid navigation mega-menu\"]{display:none!important}\nmain[class*=\"page-container\"]{padding-left:0!important}\nsection[data-testid^=\"data-testid Panel header\"] h2{font-size:13px!important}\nheader, [data-testid=\"data-testid Nav toolbar\"], [data-testid=\"data-testid dashboard controls\"]{background:#F5F2FF!important;border-color:#E8E2FB!important}\n[data-testid=\"data-testid Dashboard link container\"] a, [data-testid=\"data-testid Dashboard link\"]{border-radius:999px!important;background:#fff!important;\n  border:1px solid #D9CFFB!important;color:#5B3FD1!important}\nsection[data-testid^=\"data-testid Panel header\"] a{color:#6D4AFF!important}\nsection[data-testid^=\"data-testid Panel header\"] [role=\"columnheader\"]{color:#6E6890!important;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.06em;background:#FAF8FF!important}\n</style><div class=\"sqhero\"><div class=\"logo\">SQ</div><div><h1>Stream Quality</h1><p>One row per topic with a RAG status per check type.</p></div>\n<div class=\"key\"><span><i style=\"background:#1FA971\"></i>OK</span><span><i style=\"background:#F0A33A\"></i>Warn</span><span><i style=\"background:#E5484D\"></i>Fail</span></div></div>"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
       "id": 1,
       "title": "Topic health (latest window per check)",
       "type": "table",
@@ -56,9 +77,9 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
-        "w": 16,
-        "h": 9
+        "y": 5,
+        "w": 24,
+        "h": 7
       },
       "targets": [
         {
@@ -94,17 +115,17 @@
                     "options": {
                       "0": {
                         "text": "OK",
-                        "color": "green",
+                        "color": "rgba(31,169,113,0.14)",
                         "index": 0
                       },
                       "1": {
                         "text": "WARN",
-                        "color": "orange",
+                        "color": "rgba(240,163,58,0.20)",
                         "index": 1
                       },
                       "2": {
                         "text": "FAIL",
-                        "color": "red",
+                        "color": "rgba(229,72,77,0.16)",
                         "index": 2
                       }
                     }
@@ -115,7 +136,7 @@
                       "match": "null",
                       "result": {
                         "text": "no data",
-                        "color": "text",
+                        "color": "#F1EEFB",
                         "index": 3
                       }
                     }
@@ -145,17 +166,17 @@
                     "options": {
                       "0": {
                         "text": "OK",
-                        "color": "green",
+                        "color": "rgba(31,169,113,0.14)",
                         "index": 0
                       },
                       "1": {
                         "text": "WARN",
-                        "color": "orange",
+                        "color": "rgba(240,163,58,0.20)",
                         "index": 1
                       },
                       "2": {
                         "text": "FAIL",
-                        "color": "red",
+                        "color": "rgba(229,72,77,0.16)",
                         "index": 2
                       }
                     }
@@ -166,7 +187,7 @@
                       "match": "null",
                       "result": {
                         "text": "no data",
-                        "color": "text",
+                        "color": "#F1EEFB",
                         "index": 3
                       }
                     }
@@ -196,17 +217,17 @@
                     "options": {
                       "0": {
                         "text": "OK",
-                        "color": "green",
+                        "color": "rgba(31,169,113,0.14)",
                         "index": 0
                       },
                       "1": {
                         "text": "WARN",
-                        "color": "orange",
+                        "color": "rgba(240,163,58,0.20)",
                         "index": 1
                       },
                       "2": {
                         "text": "FAIL",
-                        "color": "red",
+                        "color": "rgba(229,72,77,0.16)",
                         "index": 2
                       }
                     }
@@ -217,7 +238,7 @@
                       "match": "null",
                       "result": {
                         "text": "no data",
-                        "color": "text",
+                        "color": "#F1EEFB",
                         "index": 3
                       }
                     }
@@ -247,17 +268,17 @@
                     "options": {
                       "0": {
                         "text": "OK",
-                        "color": "green",
+                        "color": "rgba(31,169,113,0.14)",
                         "index": 0
                       },
                       "1": {
                         "text": "WARN",
-                        "color": "orange",
+                        "color": "rgba(240,163,58,0.20)",
                         "index": 1
                       },
                       "2": {
                         "text": "FAIL",
-                        "color": "red",
+                        "color": "rgba(229,72,77,0.16)",
                         "index": 2
                       }
                     }
@@ -268,7 +289,7 @@
                       "match": "null",
                       "result": {
                         "text": "no data",
-                        "color": "text",
+                        "color": "#F1EEFB",
                         "index": 3
                       }
                     }
@@ -298,17 +319,17 @@
                     "options": {
                       "0": {
                         "text": "OK",
-                        "color": "green",
+                        "color": "rgba(31,169,113,0.14)",
                         "index": 0
                       },
                       "1": {
                         "text": "WARN",
-                        "color": "orange",
+                        "color": "rgba(240,163,58,0.20)",
                         "index": 1
                       },
                       "2": {
                         "text": "FAIL",
-                        "color": "red",
+                        "color": "rgba(229,72,77,0.16)",
                         "index": 2
                       }
                     }
@@ -319,7 +340,7 @@
                       "match": "null",
                       "result": {
                         "text": "no data",
-                        "color": "text",
+                        "color": "#F1EEFB",
                         "index": 3
                       }
                     }
@@ -338,9 +359,33 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "last_window"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time:HH:mm:ss"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "topic"
             },
             "properties": [
+              {
+                "id": "custom.width",
+                "value": 270
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
+              },
               {
                 "id": "links",
                 "value": [
@@ -366,9 +411,9 @@
         "uid": "sq-pg"
       },
       "gridPos": {
-        "x": 16,
-        "y": 0,
-        "w": 4,
+        "x": 0,
+        "y": 2,
+        "w": 5,
         "h": 3
       },
       "targets": [
@@ -386,15 +431,18 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#7C5CFC",
                 "value": null
               },
               {
-                "color": "red",
+                "color": "#E5484D",
                 "value": 1
               }
             ]
@@ -402,7 +450,19 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 3,
@@ -414,9 +474,9 @@
         "uid": "sq-pg"
       },
       "gridPos": {
-        "x": 20,
-        "y": 0,
-        "w": 4,
+        "x": 5,
+        "y": 2,
+        "w": 5,
         "h": 3
       },
       "targets": [
@@ -434,15 +494,18 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#7C5CFC",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#F0A33A",
                 "value": 1
               }
             ]
@@ -450,11 +513,23 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 4,
-      "title": "Monitor heartbeat age (s)",
+      "title": "Monitor heartbeat age",
       "type": "stat",
       "description": "Seconds since the Flink job last wrote a heartbeat.",
       "datasource": {
@@ -462,9 +537,9 @@
         "uid": "sq-pg"
       },
       "gridPos": {
-        "x": 16,
-        "y": 3,
-        "w": 4,
+        "x": 10,
+        "y": 2,
+        "w": 5,
         "h": 3
       },
       "targets": [
@@ -482,20 +557,23 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "unit": "s",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#1FA971",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#F0A33A",
                 "value": 120
               },
               {
-                "color": "red",
+                "color": "#E5484D",
                 "value": 300
               }
             ]
@@ -503,7 +581,19 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 5,
@@ -515,8 +605,8 @@
         "uid": "sq-pg"
       },
       "gridPos": {
-        "x": 20,
-        "y": 3,
+        "x": 15,
+        "y": 2,
         "w": 4,
         "h": 3
       },
@@ -535,17 +625,20 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
             {
               "type": "value",
               "options": {
                 "up": {
                   "text": "UP",
-                  "color": "green"
+                  "color": "#1FA971"
                 },
                 "down": {
                   "text": "DOWN",
-                  "color": "red"
+                  "color": "#E5484D"
                 }
               }
             }
@@ -553,7 +646,19 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 6,
@@ -565,9 +670,9 @@
         "uid": "sq-pg"
       },
       "gridPos": {
-        "x": 16,
-        "y": 6,
-        "w": 8,
+        "x": 19,
+        "y": 2,
+        "w": 5,
         "h": 3
       },
       "targets": [
@@ -585,25 +690,28 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
             {
               "type": "value",
               "options": {
                 "up": {
                   "text": "UP",
-                  "color": "green"
+                  "color": "#1FA971"
                 },
                 "disabled": {
                   "text": "DISABLED",
-                  "color": "text"
+                  "color": "#6E6890"
                 },
                 "down": {
                   "text": "DOWN (structural skipped)",
-                  "color": "orange"
+                  "color": "#F0A33A"
                 },
                 "unknown": {
                   "text": "UNKNOWN",
-                  "color": "text"
+                  "color": "#6E6890"
                 }
               }
             }
@@ -611,7 +719,19 @@
         },
         "overrides": []
       },
-      "options": {}
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        }
+      }
     },
     {
       "id": 7,
@@ -624,7 +744,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 9,
+        "y": 12,
         "w": 24,
         "h": 8
       },
@@ -648,11 +768,119 @@
             "stacking": {
               "mode": "normal"
             },
-            "fillOpacity": 70
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "barAlignment": 0
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "volume"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#7C5CFC"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "null_rate"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#06A59B"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cardinality"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#2F6FDE"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "freshness"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E11D8F"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "structural"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9B8AE8"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "type_drift"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#0E7490"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "schema_drift"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B45FD0"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {}
     }

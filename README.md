@@ -112,6 +112,19 @@ Demo credentials (`sq_writer_pw`, `admin/admin`) are for local use; change them 
 before exposing anything. Kafka secrets go in `cluster.env` and are referenced as `${env:NAME}` in `config/kafka.properties`.
 
 
+## Dashboards
+Four provisioned Grafana dashboards share one light palette (white cards on lavender, violet brand colour; status colours are reserved for
+ok/warn/fail). `make demo-data` fills an empty database with three hours of fake results so you can see them without a pipeline.
+
+![Topic health](docs/img/topic-health.png)
+![Quality analytics](docs/img/quality-analytics.png)
+![Field drill-down](docs/img/field-drilldown.png)
+![Violation log](docs/img/violation-log.png)
+
+The look comes from a stylesheet carried by each dashboard's header panel (`observability/grafana/build_dashboards.py`; the JSON is generated).
+That needs `GF_PANELS_DISABLE_SANITIZE_HTML=true`, which the compose file sets, and it hides Grafana's left menu (use the pill links on each page).
+Class names inside Grafana can change between versions: the dashboards were checked on Grafana 13.0.10.
+
 ## What the checks cover (additions)
 - **type_drift** - JSON type mix per configured field; flags a wrong-typed share (default warn 1%, fail 10%) with no registry.
 - **schema_drift** - top-level fields that appear or vanish versus what the topic normally carries.

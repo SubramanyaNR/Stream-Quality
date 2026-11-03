@@ -5,14 +5,76 @@ import json
 from pathlib import Path
 
 DS = {"type": "grafana-postgresql-datasource", "uid": "sq-pg"}
+
+# ---- one palette for everything (light theme: white cards on a lavender page, violet as the brand colour) ------------
+# Categorical series colours were run through the dataviz validator (CVD separation, lightness band, chroma floor).
+# Status colours are reserved: they are never used for a data series.
+INK, MUTED, LINE = "#2B2350", "#6E6890", "#E8E2FB"
+VIOLET, TEAL, BLUE, PINK = "#7C5CFC", "#06A59B", "#2F6FDE", "#E11D8F"
+OK, WARN, FAIL = "#1FA971", "#F0A33A", "#E5484D"
+OK_BG, WARN_BG, FAIL_BG = "rgba(31,169,113,0.14)", "rgba(240,163,58,0.20)", "rgba(229,72,77,0.16)"   # tinted cells; text stays dark
+CHECK_COLORS = {"volume": VIOLET, "null_rate": TEAL, "cardinality": BLUE, "freshness": PINK, "structural": "#9B8AE8",
+                "type_drift": "#0E7490", "schema_drift": "#B45FD0"}
+
+CSS = """
+body{background:#F5F2FF!important}
+section[data-testid^="data-testid Panel header"]{background:#fff!important;border:1px solid #E8E2FB!important;border-radius:16px!important;
+  box-shadow:0 1px 2px rgba(76,29,149,.05),0 10px 30px rgba(124,92,252,.08)!important;overflow:hidden}
+section[data-testid^="data-testid Panel header"] h2{font-weight:600!important;letter-spacing:.01em;color:#2B2350!important}
+section[data-testid="data-testid Panel header "]{background:transparent!important;border:0!important;box-shadow:none!important}
+.sqhero{display:flex;align-items:center;gap:16px;padding:6px 6px 0}
+.sqhero .logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#9B8AFF,#6D4AFF);display:grid;place-items:center;
+  color:#fff;font-weight:700;font-size:20px;box-shadow:0 8px 20px rgba(109,74,255,.35)}
+.sqhero h1{margin:0;font-size:24px;line-height:1.1;color:#2B2350;font-weight:700;letter-spacing:-.01em}
+.sqhero p{margin:3px 0 0;color:#6E6890;font-size:13px}
+.sqhero .key{margin-left:auto;display:flex;gap:14px;font-size:12px;color:#6E6890}
+.sqhero .key i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+a[data-testid^="data-testid Dashboard link"], .sq-nav a{border-radius:999px!important}
+footer, [class*="footer"]{display:none!important}
+[data-testid="data-testid navigation mega-menu"]{display:none!important}
+main[class*="page-container"]{padding-left:0!important}
+section[data-testid^="data-testid Panel header"] h2{font-size:13px!important}
+header, [data-testid="data-testid Nav toolbar"], [data-testid="data-testid dashboard controls"]{background:#F5F2FF!important;border-color:#E8E2FB!important}
+[data-testid="data-testid Dashboard link container"] a, [data-testid="data-testid Dashboard link"]{border-radius:999px!important;background:#fff!important;
+  border:1px solid #D9CFFB!important;color:#5B3FD1!important}
+section[data-testid^="data-testid Panel header"] a{color:#6D4AFF!important}
+section[data-testid^="data-testid Panel header"] [role="columnheader"]{color:#6E6890!important;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.06em;background:#FAF8FF!important}
+"""
+HERO = """<style>%s</style><div class="sqhero"><div class="logo">SQ</div><div><h1>Stream Quality</h1><p>%s</p></div>
+<div class="key"><span><i style="background:#1FA971"></i>OK</span><span><i style="background:#F0A33A"></i>Warn</span><span><i style="background:#E5484D"></i>Fail</span></div></div>"""
 OUT = Path(__file__).parent / "dashboards"
 TABLE, TS = "table", "time_series"
 STATUS_MAP = [{"type": "value", "options": {
-    "0": {"text": "OK", "color": "green", "index": 0},
-    "1": {"text": "WARN", "color": "orange", "index": 1},
-    "2": {"text": "FAIL", "color": "red", "index": 2}}},
-    {"type": "special", "options": {"match": "null", "result": {"text": "no data", "color": "text", "index": 3}}}]
+    "0": {"text": "OK", "color": OK_BG, "index": 0},
+    "1": {"text": "WARN", "color": WARN_BG, "index": 1},
+    "2": {"text": "FAIL", "color": FAIL_BG, "index": 2}}},
+    {"type": "special", "options": {"match": "null", "result": {"text": "no data", "color": "#F1EEFB", "index": 3}}}]
+STATUS_MAP_TEXT = [{"type": "value", "options": {   # same states for stat panels / text cells: solid colours
+    "0": {"text": "OK", "color": OK, "index": 0}, "1": {"text": "WARN", "color": WARN, "index": 1}, "2": {"text": "FAIL", "color": FAIL, "index": 2}}}]
 STATUS_N = "CASE status WHEN 'ok' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END"
+
+
+def by_name(name, color, extra=()):
+    return {"matcher": {"id": "byName", "options": name}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": color}}, *extra]}
+
+
+def check_colors():
+    return [by_name(c, col) for c, col in CHECK_COLORS.items()]
+
+
+def status_colors():
+    return [by_name("fail", FAIL), by_name("warn", WARN)]
+
+
+DASH = {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [6, 6]}}
+REFERENCE_LINES = [   # baselines and thresholds are reference lines: dashed, no fill, recessive; a crossed threshold is red
+    {"matcher": {"id": "byRegexp", "options": ".*(baseline|7d ago)$"}, "properties": [
+        {"id": "color", "value": {"mode": "fixed", "fixedColor": "#B7ADDF"}}, DASH, {"id": "custom.fillOpacity", "value": 0}]},
+    {"matcher": {"id": "byRegexp", "options": ".* threshold$"}, "properties": [
+        {"id": "color", "value": {"mode": "fixed", "fixedColor": FAIL}}, DASH, {"id": "custom.fillOpacity", "value": 0}]}]
+LINE_DEFAULTS = {"color": {"mode": "shades", "fixedColor": VIOLET},
+                 "custom": {"lineWidth": 2, "fillOpacity": 14, "gradientMode": "opacity", "showPoints": "never", "spanNulls": False}}
+BAR_DEFAULTS = {"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}, "fillOpacity": 85, "lineWidth": 0, "barAlignment": 0}}
 
 
 def target(sql, fmt=TABLE, ref="A"):
@@ -22,12 +84,22 @@ def target(sql, fmt=TABLE, ref="A"):
 
 
 def panel(pid, title, ptype, x, y, w, h, targets, desc="", defaults=None, overrides=None, options=None, ds=DS):
+    if ptype == "stat":
+        options = {"colorMode": "value", "graphMode": "none", "textMode": "auto", "justifyMode": "center",
+                   "reduceOptions": {"calcs": ["lastNotNull"], "fields": "/.*/", "values": False}, **(options or {})}
+        defaults = {"color": {"mode": "thresholds"}, **(defaults or {})}
     return {"id": pid, "title": title, "type": ptype, "description": desc, "datasource": ds,
             "gridPos": {"x": x, "y": y, "w": w, "h": h}, "targets": targets,
             "fieldConfig": {"defaults": defaults or {}, "overrides": overrides or []}, "options": options or {}}
 
 
+def hero(subtitle):
+    return {"id": 100, "title": "", "type": "text", "gridPos": {"x": 0, "y": 0, "w": 24, "h": 2}, "targets": [], "transparent": True,
+            "options": {"mode": "html", "content": HERO % (CSS, subtitle)}, "fieldConfig": {"defaults": {}, "overrides": []}}
+
+
 def dashboard(uid, title, panels, variables=None, links=None, desc=""):
+    panels = [hero(desc)] + [dict(p, gridPos=dict(p["gridPos"], y=p["gridPos"]["y"] + 2)) for p in panels]
     return {"uid": uid, "title": title, "description": desc, "tags": ["stream-quality"], "timezone": "utc",
             "schemaVersion": 39, "version": 1, "editable": True, "refresh": "10s",
             "time": {"from": "now-1h", "to": "now"}, "graphTooltip": 1,
@@ -59,35 +131,37 @@ GROUP BY topic ORDER BY topic"""
 rag_overrides = [{"matcher": {"id": "byName", "options": c}, "properties": [
     {"id": "mappings", "value": STATUS_MAP}, {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "basic"}}]}
     for c in checks]
+rag_overrides.append({"matcher": {"id": "byName", "options": "last_window"}, "properties": [{"id": "unit", "value": "time:HH:mm:ss"}, {"id": "custom.width", "value": 110}]})
 rag_overrides.append({"matcher": {"id": "byName", "options": "topic"}, "properties": [
+    {"id": "custom.width", "value": 270}, {"id": "custom.align", "value": "left"},
     {"id": "links", "value": [{"title": "Drill down", "url": "/d/sq-field-drilldown?var-topic=${__value.raw}&${__url_time_range}"}]}]})
 
 p1 = [
-    panel(1, "Topic health (latest window per check)", "table", 0, 0, 16, 9, [target(RAG_SQL)],
+    panel(1, "Topic health (latest window per check)", "table", 0, 3, 24, 7, [target(RAG_SQL)],
           "Worst status across fields for each check type, from the latest window. 'no data' = no result in the last 5 minutes "
           "(check not configured for the topic, or the topic/monitor is silent). Click a topic to drill down.",
           defaults={"custom": {"align": "center"}}, overrides=rag_overrides),
-    panel(2, "Topics failing", "stat", 16, 0, 4, 3, [target(
+    panel(2, "Topics failing", "stat", 0, 0, 5, 3, [target(
         "SELECT count(DISTINCT topic) AS failing FROM sq.latest_status WHERE status = 'fail' AND window_end > now() - interval '5 minutes'")],
-          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "red", "value": 1}]}}),
-    panel(3, "Topics warning", "stat", 20, 0, 4, 3, [target(
+          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": VIOLET, "value": None}, {"color": FAIL, "value": 1}]}}),
+    panel(3, "Topics warning", "stat", 5, 0, 5, 3, [target(
         "SELECT count(DISTINCT topic) AS warning FROM sq.latest_status WHERE status = 'warn' AND window_end > now() - interval '5 minutes'")],
-          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}]}}),
-    panel(4, "Monitor heartbeat age (s)", "stat", 16, 3, 4, 3, [target(
+          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": VIOLET, "value": None}, {"color": WARN, "value": 1}]}}),
+    panel(4, "Monitor heartbeat age", "stat", 10, 0, 5, 3, [target(
         "SELECT extract(epoch FROM now() - max(ts))::int AS age_s FROM sq.job_heartbeat")],
           "Seconds since the Flink job last wrote a heartbeat.",
-          defaults={"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 120}, {"color": "red", "value": 300}]}}),
-    panel(5, "Kafka reachable", "stat", 20, 3, 4, 3, [target(
+          defaults={"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": OK, "value": None}, {"color": WARN, "value": 120}, {"color": FAIL, "value": 300}]}}),
+    panel(5, "Kafka reachable", "stat", 15, 0, 4, 3, [target(
         "SELECT kafka_status AS kafka FROM sq.job_heartbeat ORDER BY ts DESC LIMIT 1")],
-          defaults={"mappings": [{"type": "value", "options": {"up": {"text": "UP", "color": "green"}, "down": {"text": "DOWN", "color": "red"}}}]}),
-    panel(6, "Registry", "stat", 16, 6, 8, 3, [target("SELECT registry_status AS registry FROM sq.job_heartbeat ORDER BY ts DESC LIMIT 1")],
+          defaults={"mappings": [{"type": "value", "options": {"up": {"text": "UP", "color": OK}, "down": {"text": "DOWN", "color": FAIL}}}]}),
+    panel(6, "Registry", "stat", 19, 0, 5, 3, [target("SELECT registry_status AS registry FROM sq.job_heartbeat ORDER BY ts DESC LIMIT 1")],
           "disabled / up / down. When down, structural checks are skipped; statistical checks continue.",
-          defaults={"mappings": [{"type": "value", "options": {"up": {"text": "UP", "color": "green"}, "disabled": {"text": "DISABLED", "color": "text"},
-                                                                  "down": {"text": "DOWN (structural skipped)", "color": "orange"}, "unknown": {"text": "UNKNOWN", "color": "text"}}}]}),
-    panel(7, "Violations per minute by check type", "timeseries", 0, 9, 24, 8, [target(
+          defaults={"mappings": [{"type": "value", "options": {"up": {"text": "UP", "color": OK}, "disabled": {"text": "DISABLED", "color": MUTED},
+                                                                  "down": {"text": "DOWN (structural skipped)", "color": WARN}, "unknown": {"text": "UNKNOWN", "color": MUTED}}}]}),
+    panel(7, "Violations per minute by check type", "timeseries", 0, 10, 24, 8, [target(
         """SELECT $__timeGroupAlias(window_end, '1m'), check_type AS metric, count(*) AS violations
            FROM sq.violations WHERE $__timeFilter(window_end) GROUP BY 1, 2 ORDER BY 1""", TS)],
-          defaults={"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}, "fillOpacity": 70}, "unit": "short"}),
+          defaults={**BAR_DEFAULTS, "unit": "short"}, overrides=check_colors()),
 ]
 d1 = dashboard("sq-topic-health", "Stream Quality - Topic health", p1, links=NAV,
                desc="One row per topic with a RAG status per check type.")
@@ -101,14 +175,12 @@ thr_style = {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 6]}
 T = '"time"'
 
 
-def ts_panel(pid, title, x, y, sql_main, sql_thr=None, unit="short", desc="", w=12):
+def ts_panel(pid, title, x, y, sql_main, sql_thr=None, unit="short", desc="", w=12, extra=()):
     targets = [target(sql_main, TS, "A")]
-    overrides = []
     if sql_thr:
         targets.append(target(sql_thr, TS, "B"))
-        overrides.append({"matcher": {"id": "byFrameRefID", "options": "B"}, "properties": [thr_style, {"id": "custom.fillOpacity", "value": 0}]})
     return panel(pid, title, "timeseries", x, y, w, 8, targets, desc,
-                 defaults={"unit": unit, "custom": {"lineWidth": 2, "fillOpacity": 10, "spanNulls": False}}, overrides=overrides)
+                 defaults={**LINE_DEFAULTS, "unit": unit}, overrides=[*REFERENCE_LINES, *extra])
 
 
 def cr(extra):
@@ -128,7 +200,8 @@ p2 = [
              f"SELECT * FROM (SELECT window_start AS {T}, 'p50' AS metric, p50_ms AS ms {cr(f'check_type = {chr(39)}freshness{chr(39)} AND {TOPIC_F}')} UNION ALL "
              f"SELECT window_start, 'p95', value {cr(f'check_type = {chr(39)}freshness{chr(39)} AND {TOPIC_F}')} UNION ALL "
              f"SELECT window_start, 'p99', p99_ms {cr(f'check_type = {chr(39)}freshness{chr(39)} AND {TOPIC_F}')}) u ORDER BY 1",
-             None, "ms", "Processing time minus the payload timestamp. Status is judged on p95."),
+             None, "ms", "Processing time minus the payload timestamp. Status is judged on p95.",
+             extra=[by_name("p50", TEAL), by_name("p95", VIOLET), by_name("p99", PINK)]),
     ts_panel(4, "Volume (messages/s) vs baseline", 12, 8,
              f"SELECT window_start AS {T}, topic AS metric, value AS msgs_per_s {cr(f'check_type = {chr(39)}volume{chr(39)} AND {TOPIC_F}')} ORDER BY 1",
              f"SELECT window_start AS {T}, topic || ' baseline' AS metric, baseline {cr(f'check_type = {chr(39)}volume{chr(39)} AND {TOPIC_F} AND baseline IS NOT NULL')} ORDER BY 1",
@@ -136,8 +209,8 @@ p2 = [
     panel(5, "Status timeline (all checks for selected topic/fields)", "state-timeline", 0, 16, 24, 8, [target(
         f"""SELECT window_start AS {T}, check_type || CASE WHEN field = '' THEN '' ELSE '.' || field END AS metric, {STATUS_N} AS status
             {cr(f"{TOPIC_F} AND (field = '' OR {FIELD_F})")} ORDER BY 1""", TS)],
-          defaults={"mappings": STATUS_MAP, "color": {"mode": "thresholds"},
-                    "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 2}]}},
+          defaults={"mappings": STATUS_MAP_TEXT, "color": {"mode": "thresholds"},
+                    "thresholds": {"mode": "absolute", "steps": [{"color": OK, "value": None}, {"color": WARN, "value": 1}, {"color": FAIL, "value": 2}]}},
           options={"mergeValues": True, "showValue": "never", "rowHeight": 0.8}),
 ]
 d2 = dashboard("sq-field-drilldown", "Stream Quality - Field drill-down", p2, vars2, NAV,
@@ -153,7 +226,7 @@ SELECT window_end AS {T}, topic, field, check_type, status::text AS status, roun
        round(threshold::numeric, 4) AS threshold, details::text AS details
 FROM sq.violations WHERE $__timeFilter(window_end) AND {VF} ORDER BY window_end DESC LIMIT 1000"""
 status_override = {"matcher": {"id": "byName", "options": "status"}, "properties": [
-    {"id": "mappings", "value": [{"type": "value", "options": {"fail": {"text": "FAIL", "color": "red", "index": 0}, "warn": {"text": "WARN", "color": "orange", "index": 1}}}]},
+    {"id": "mappings", "value": [{"type": "value", "options": {"fail": {"text": "FAIL", "color": FAIL, "index": 0}, "warn": {"text": "WARN", "color": WARN, "index": 1}}}]},
     {"id": "custom.cellOptions", "value": {"type": "color-text"}}]}
 p3 = [
     panel(1, "Violation audit log", "table", 0, 0, 24, 14, [target(LOG_SQL)],
@@ -162,9 +235,7 @@ p3 = [
     panel(2, "Violations over time", "timeseries", 0, 14, 12, 7, [target(
         f"""SELECT $__timeGroupAlias(window_end, '1m'), status::text AS metric, count(*) AS n
             FROM sq.violations WHERE $__timeFilter(window_end) AND {VF} GROUP BY 1, 2 ORDER BY 1""", TS)],
-          defaults={"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}, "fillOpacity": 70}},
-          overrides=[{"matcher": {"id": "byName", "options": "fail"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
-                     {"matcher": {"id": "byName", "options": "warn"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]}]),
+          defaults=BAR_DEFAULTS, overrides=status_colors()),
     panel(3, "Top offenders", "table", 12, 14, 12, 7, [target(
         f"""SELECT topic, field, check_type, count(*) FILTER (WHERE status = 'fail') AS fails, count(*) FILTER (WHERE status = 'warn') AS warns
             FROM sq.violations WHERE $__timeFilter(window_end) AND {VF} GROUP BY topic, field, check_type ORDER BY fails DESC, warns DESC LIMIT 20""")]),
@@ -174,7 +245,7 @@ p3 = [
             FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR {TOPIC_F}) ORDER BY fired_at DESC LIMIT 200""")],
           "Every alert Alertmanager delivered (stored by the alert-sink in sq.alert_events). One row per alert instance: when it fired, when it resolved, how long it lasted.",
           overrides=[{"matcher": {"id": "byName", "options": "state"}, "properties": [
-                     {"id": "mappings", "value": [{"type": "value", "options": {"FIRING": {"text": "FIRING", "color": "red", "index": 0}, "resolved": {"text": "resolved", "color": "green", "index": 1}}}]},
+                     {"id": "mappings", "value": [{"type": "value", "options": {"FIRING": {"text": "FIRING", "color": FAIL, "index": 0}, "resolved": {"text": "resolved", "color": OK, "index": 1}}}]},
                      {"id": "custom.cellOptions", "value": {"type": "color-text"}}]}, {"matcher": {"id": "byName", "options": "duration_s"}, "properties": [{"id": "unit", "value": "s"}]}]),
 ]
 d3 = dashboard("sq-violations", "Stream Quality - Violation log", p3, vars3, NAV,
@@ -188,9 +259,10 @@ vars4 = [query_var("topic", "Topic", "SELECT DISTINCT topic FROM sq.latest_statu
 F = f"$__timeFilter(window_start) AND {TOPIC_F}"
 SCORE = "CASE status WHEN 'ok' THEN 1.0 WHEN 'warn' THEN 0.5 ELSE 0.0 END"
 INC = f"sq.incidents($__timeFrom(), $__timeTo()) WHERE {TOPIC_F}"
-score_thr = {"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "orange", "value": 95}, {"color": "green", "value": 99}]}
+score_thr = {"mode": "absolute", "steps": [{"color": FAIL, "value": None}, {"color": WARN, "value": 95}, {"color": OK, "value": 99}]}
 pct_ok_override = {"matcher": {"id": "byName", "options": "pct_ok"}, "properties": [
-    {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "basic"}}, {"id": "unit", "value": "percent"},
+    {"id": "custom.cellOptions", "value": {"type": "gauge", "mode": "basic", "valueDisplayMode": "text"}}, {"id": "unit", "value": "percent"},
+    {"id": "min", "value": 80}, {"id": "max", "value": 100}, {"id": "color", "value": {"mode": "thresholds"}},
     {"id": "thresholds", "value": score_thr}]}
 
 p4 = [
@@ -205,10 +277,10 @@ p4 = [
     panel(3, "Open now", "stat", 8, 0, 4, 4, [target(
         f"SELECT count(*) AS open_now FROM sq.latest_status WHERE status <> 'ok' AND window_end > now() - interval '5 minutes' AND {TOPIC_F}")],
           "Checks whose latest window is warn/fail.",
-          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 3}]}}),
+          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": VIOLET, "value": None}, {"color": WARN, "value": 1}, {"color": FAIL, "value": 3}]}}),
     panel(4, "Incident count", "stat", 12, 0, 4, 4, [target(f"SELECT count(*) AS incidents FROM {INC}")],
           "Runs of consecutive warn/fail windows for one check, in the selected range.",
-          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}]}}),
+          defaults={"thresholds": {"mode": "absolute", "steps": [{"color": OK, "value": None}, {"color": WARN, "value": 1}]}}),
     panel(5, "Longest incident", "stat", 16, 0, 4, 4, [target(f"SELECT extract(epoch FROM max(duration))::int AS seconds FROM {INC}")],
           defaults={"unit": "s"}),
     panel(6, "Avg incident duration", "stat", 20, 0, 4, 4, [target(f"SELECT extract(epoch FROM avg(duration))::int AS seconds FROM {INC}")],
@@ -221,7 +293,7 @@ p4 = [
     panel(8, "Quality score over time", "timeseries", 12, 4, 12, 9, [target(
         f"""SELECT $__timeGroupAlias(window_start, $__interval), topic AS metric, round((100 * avg({SCORE}))::numeric, 2) AS score
             FROM sq.check_results WHERE {F} GROUP BY 1, 2 ORDER BY 1""", TS)],
-          defaults={"unit": "percent", "min": 0, "max": 100, "custom": {"lineWidth": 2, "fillOpacity": 8}}),
+          defaults={**LINE_DEFAULTS, "unit": "percent", "min": 0, "max": 100}),
     panel(9, "Incident log", "table", 0, 13, 14, 10, [target(
         f"""SELECT started AS {T}, ended, topic, check_type, field, worst_status::text AS worst, windows, fail_windows,
                    extract(epoch FROM duration)::int AS duration_s
@@ -229,11 +301,11 @@ p4 = [
           "One row per incident (consecutive unhealthy windows of one check; a gap of > 3 window lengths ends an incident).",
           overrides=[{"matcher": {"id": "byName", "options": "duration_s"}, "properties": [{"id": "unit", "value": "s"}]},
                      {"matcher": {"id": "byName", "options": "worst"}, "properties": [
-                         {"id": "mappings", "value": [{"type": "value", "options": {"fail": {"text": "FAIL", "color": "red", "index": 0}, "warn": {"text": "WARN", "color": "orange", "index": 1}}}]},
+                         {"id": "mappings", "value": [{"type": "value", "options": {"fail": {"text": "FAIL", "color": FAIL, "index": 0}, "warn": {"text": "WARN", "color": WARN, "index": 1}}}]},
                          {"id": "custom.cellOptions", "value": {"type": "color-text"}}]}]),
     panel(10, "Incidents started per hour", "timeseries", 14, 13, 10, 10, [target(
         f"""SELECT $__timeGroupAlias(started, '1h'), check_type AS metric, count(*) AS incidents FROM {INC} GROUP BY 1, 2 ORDER BY 1""", TS)],
-          defaults={"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}, "fillOpacity": 70}}),
+          defaults=BAR_DEFAULTS, overrides=check_colors()),
     panel(11, "Flappiest checks", "table", 0, 23, 8, 9, [target(
         f"""SELECT topic, check_type, field, count(*) FILTER (WHERE flipped) AS flips, count(*) AS windows,
                    round(100.0 * count(*) FILTER (WHERE flipped) / count(*), 1) AS flip_pct
@@ -266,12 +338,12 @@ p4 = [
             FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR {TOPIC_F}) ORDER BY fired_at DESC LIMIT 200""")],
           "Alerts delivered by Alertmanager (sq.alert_history): when each fired, when it resolved, how long it lasted.",
           overrides=[{"matcher": {"id": "byName", "options": "state"}, "properties": [
-                     {"id": "mappings", "value": [{"type": "value", "options": {"FIRING": {"text": "FIRING", "color": "red", "index": 0}, "resolved": {"text": "resolved", "color": "green", "index": 1}}}]},
+                     {"id": "mappings", "value": [{"type": "value", "options": {"FIRING": {"text": "FIRING", "color": FAIL, "index": 0}, "resolved": {"text": "resolved", "color": OK, "index": 1}}}]},
                      {"id": "custom.cellOptions", "value": {"type": "color-text"}}]}, {"matcher": {"id": "byName", "options": "duration_s"}, "properties": [{"id": "unit", "value": "s"}]}]),
     panel(16, "Alerts fired per hour", "timeseries", 16, 40, 8, 9, [target(
         f"""SELECT $__timeGroupAlias(fired_at, '1h'), severity AS metric, count(*) AS alerts
             FROM sq.alert_history WHERE $__timeFilter(fired_at) AND (topic = '' OR {TOPIC_F}) GROUP BY 1, 2 ORDER BY 1""", TS)],
-          defaults={"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}, "fillOpacity": 70}}),
+          defaults=BAR_DEFAULTS, overrides=[by_name("critical", FAIL), by_name("warning", WARN)]),
 ]
 d4 = dashboard("sq-analytics", "Stream Quality - Quality analytics", p4, vars4, NAV,
                "Data-quality score, availability, incidents, flapping checks and week-over-week trends computed with SQL.")
