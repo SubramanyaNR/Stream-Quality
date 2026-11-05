@@ -83,7 +83,9 @@ public final class StreamQualityJob {
         Properties kafkaAll = ConfigLoader.load(dir.resolve("kafka.properties"));
         Properties registry = ConfigLoader.load(dir.resolve("registry.properties"));
         Properties kafkaClient = ConfigLoader.kafkaClientProps(kafkaAll);
-        Thresholds th = Thresholds.load(dir.resolve("thresholds.yaml"));
+        // SQ_THRESHOLDS_FILE switches to another thresholds file (make demo uses config/demo/thresholds.yaml).
+        String thFile = arg(params, "thresholds-file", "SQ_THRESHOLDS_FILE", null);
+        Thresholds th = Thresholds.load(thFile == null || thFile.isBlank() ? dir.resolve("thresholds.yaml") : Path.of(thFile));
         int parallelism = params.getInt("parallelism", 1);
         env.setParallelism(parallelism);
         // Cluster config (docker-compose) normally sets this; make the job safe when run without it.

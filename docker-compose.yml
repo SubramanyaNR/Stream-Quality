@@ -127,6 +127,9 @@ services:
       - sq-state:/var/lib/sq/state
     environment:
       SQ_HEAP: ${SQ_HEAP:-256m}
+      # `make demo` restarts the job with these set; normally empty (= config/thresholds.yaml and TOPICS_PATTERN).
+      SQ_THRESHOLDS_FILE: ${SQ_DEMO_THRESHOLDS:-}
+      TOPICS_PATTERN: ${SQ_DEMO_TOPICS_PATTERN:-${TOPICS_PATTERN:-}}
       JOB_JAR: /opt/flink/usrlib/stream-quality-job.jar
       SQ_CONFIG_DIR: /opt/sq/config
       POSTGRES_URL: jdbc:postgresql://postgres:5432/sq

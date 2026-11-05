@@ -1,0 +1,20 @@
+# Used only by `make demo`: the job watches the demo topic with short windows so faults show up within a minute.
+window: { size: 20s, max_out_of_orderness: 3s, idle_timeout: 30s }
+event_time_field: event_time
+history_windows: 30
+rebaseline_after: 30
+defaults:
+  volume:       { warn_drop_pct: 30, fail_drop_pct: 60, min_history: 3, fail_on_zero: true }
+  null_rate:    { warn: 0.02, fail: 0.10 }
+  cardinality:  { warn_ratio: 2.0, fail_ratio: 5.0, min_history: 3, min_baseline: 10 }
+  freshness:    { warn_p95_ms: 30000, fail_p95_ms: 120000 }
+  type_drift:   { warn: 0.01, fail: 0.10, min_history: 3 }
+  schema_drift: { warn: 0, fail: 3, min_history: 3 }
+topics:
+  demo.payments:
+    fields:
+      payment_id:  { required: true, null_rate: { warn: 0.0, fail: 0.01 } }
+      account_id:  { required: true }
+      amount:      {}
+      currency:    {}
+      customer_id: { cardinality: true }
