@@ -112,6 +112,12 @@ Credentials: `make up` generates a random password for every account (Postgres a
 Kafka secrets go in `cluster.env` and are referenced as `${env:NAME}` in `config/kafka.properties`.
 
 
+## See it react: `make demo`
+With the stack running (`make up`, compact mode), `make demo` creates a topic `demo.payments` on your cluster, points the
+job at it and streams payment events that cycle through real-world breakages: a null spike, wrong-typed amounts, a new
+field and a silent topic. Within a few minutes the dashboards and alerts show each one. Your own topics are untouched;
+`make demo-stop` puts the job back on them.
+
 ## Dashboards
 Four provisioned Grafana dashboards share one light palette (white cards on lavender, violet brand colour; status colours are reserved for
 ok/warn/fail). `make demo-data` fills an empty database with three hours of fake results so you can see them without a pipeline.
