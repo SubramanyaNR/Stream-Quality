@@ -51,6 +51,18 @@ jobs:
         run: |
           docker run --rm -v "$PWD/observability/prometheus/rules:/r:ro" --entrypoint promtool prom/prometheus:v3.13.4 check rules /r/sq.yml
 
+  docker-images:
+    # Builds the production images exactly as `make up` does (Maven runs INSIDE Docker for the Flink image).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -f flink/Dockerfile -t stream-quality/flink:ci .
+      - run: docker build -t stream-quality-alert-sink:ci tools/alert-sink
+      - name: compose file is valid in both run modes
+        run: |
+          cp cluster.env.example cluster.env && ./scripts/init-secrets.sh || true
+          for p in compact cluster; do COMPOSE_PROFILES=$p docker compose --env-file cluster.env config --services; done
+
   e2e:
     runs-on: ubuntu-latest
     needs: unit-and-sql

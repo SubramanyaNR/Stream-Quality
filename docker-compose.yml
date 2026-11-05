@@ -93,6 +93,7 @@ services:
 
   flink-job-submit:                                    # one-shot: submits the job, then exits
     <<: *flink-common
+    profiles: [cluster]
     container_name: sq-flink-submit
     depends_on:
       flink-jobmanager: { condition: service_healthy }
