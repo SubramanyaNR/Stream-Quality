@@ -22,11 +22,11 @@ services:
       retries: 30
   postgres:
     image: postgres:17-alpine
-    environment: { POSTGRES_DB: sq, POSTGRES_USER: sq_admin, POSTGRES_PASSWORD: admin }
+    environment: { POSTGRES_DB: sq, POSTGRES_USER: sq_admin, POSTGRES_PASSWORD: "${E2E_ADMIN_PASSWORD:?set by scripts/e2e.sh}", SQ_WRITER_PASSWORD: "${SQ_WRITER_PASSWORD:?set by scripts/e2e.sh}", SQ_READER_PASSWORD: "${SQ_READER_PASSWORD:?set by scripts/e2e.sh}" }
     ports: ["15433:5432"]
     volumes: ["./postgres/init:/docker-entrypoint-initdb.d:ro"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sq_admin -d sq && PGPASSWORD=admin psql -h 127.0.0.1 -U sq_admin -d sq -tAc \"SELECT 1 FROM pg_roles WHERE rolname='sq_reader'\" | grep -qx 1"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sq_admin -d sq && PGPASSWORD=$$POSTGRES_PASSWORD psql -h 127.0.0.1 -U sq_admin -d sq -tAc \"SELECT 1 FROM pg_authid WHERE rolname='sq_reader' AND rolpassword IS NOT NULL\" | grep -qx 1"]
       interval: 3s
       retries: 40
   job:
@@ -40,4 +40,4 @@ services:
       SQ_CONFIG_DIR: /opt/sq/config
       POSTGRES_URL: jdbc:postgresql://postgres:5432/sq
       POSTGRES_USER: sq_writer
-      POSTGRES_PASSWORD: sq_writer_pw
+      POSTGRES_PASSWORD: "${SQ_WRITER_PASSWORD:?set by scripts/e2e.sh}"

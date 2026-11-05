@@ -16,16 +16,18 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: sq-postgres
-    ports: ["5432:5432"]
+    ports: ["${SQ_BIND_ADDRESS:-127.0.0.1}:5432:5432"]
     environment:
       POSTGRES_DB: sq
       POSTGRES_USER: sq_admin
-      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?run make up (it generates passwords into cluster.env)}
+      SQ_WRITER_PASSWORD: ${SQ_WRITER_PASSWORD:?run make up (it generates passwords into cluster.env)}
+      SQ_READER_PASSWORD: ${SQ_READER_PASSWORD:?run make up (it generates passwords into cluster.env)}
     volumes:
       - pg-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro       # runs once, on first start of an empty volume
-    healthcheck:   # TCP check: during first-boot init the server only listens on its unix socket; also wait for the LAST init step (sq_reader role)
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sq_admin -d sq && PGPASSWORD=\"$${POSTGRES_PASSWORD}\" psql -h 127.0.0.1 -U sq_admin -d sq -tAc \"SELECT 1 FROM pg_roles WHERE rolname = 'sq_reader'\" | grep -qx 1"]
+    healthcheck:   # TCP check: during first-boot init the server only listens on its unix socket; also wait for the LAST init step (role passwords set)
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sq_admin -d sq && PGPASSWORD=\"$${POSTGRES_PASSWORD}\" psql -h 127.0.0.1 -U sq_admin -d sq -tAc \"SELECT 1 FROM pg_authid WHERE rolname = 'sq_reader' AND rolpassword IS NOT NULL\" | grep -qx 1"]
       interval: 5s
       timeout: 5s
       retries: 40
@@ -38,7 +40,7 @@ services:
     environment:
       PGHOST: postgres
       PGUSER: sq_admin
-      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:-admin}
+      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:?run make up}
       PGDATABASE: sq
     entrypoint: ["/bin/sh", "-c"]
     command: ["while true; do psql -tAc \"SELECT sq.purge_old(${RESULTS_RETENTION_DAYS:-30}, ${HEARTBEAT_RETENTION_DAYS:-14})\"; sleep 3600; done"]
@@ -50,7 +52,7 @@ services:
     profiles: [cluster]                                # standalone Flink cluster (COMPOSE_PROFILES=cluster)
     container_name: sq-flink-jm
     command: jobmanager
-    ports: ["8082:8081"]                               # Flink UI (8082 avoids clashing with Apicurio on 8081)
+    ports: ["${SQ_BIND_ADDRESS:-127.0.0.1}:8082:8081"]                               # Flink UI (8082 avoids clashing with Apicurio on 8081)
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
@@ -103,7 +105,7 @@ services:
       SQ_CONFIG_DIR: /opt/sq/config
       POSTGRES_URL: jdbc:postgresql://postgres:5432/sq
       POSTGRES_USER: sq_writer
-      POSTGRES_PASSWORD: sq_writer_pw
+      POSTGRES_PASSWORD: ${SQ_WRITER_PASSWORD:?run make up (it generates passwords into cluster.env)}
 
   # Compact mode (default): the job runs embedded in ONE small JVM, no separate JobManager/TaskManager containers.
   # Same image, same checks, same metrics; state survives restarts via retained checkpoints on the sq-state volume.
@@ -128,12 +130,12 @@ services:
       SQ_CONFIG_DIR: /opt/sq/config
       POSTGRES_URL: jdbc:postgresql://postgres:5432/sq
       POSTGRES_USER: sq_writer
-      POSTGRES_PASSWORD: sq_writer_pw
+      POSTGRES_PASSWORD: ${SQ_WRITER_PASSWORD:?run make up (it generates passwords into cluster.env)}
 
   prometheus:
     image: prom/prometheus:v3.13.4
     container_name: sq-prometheus
-    ports: ["9090:9090"]
+    ports: ["${SQ_BIND_ADDRESS:-127.0.0.1}:9090:9090"]
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d", "--web.enable-lifecycle"]
     volumes:
       - ./observability/prometheus:/etc/prometheus:ro
@@ -143,7 +145,7 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.34.1
     container_name: sq-alertmanager
-    ports: ["9093:9093"]
+    ports: ["${SQ_BIND_ADDRESS:-127.0.0.1}:9093:9093"]
     command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
     volumes: ["./observability/alertmanager:/etc/alertmanager:ro", "am-data:/alertmanager"]
     networks: [sq]
@@ -151,12 +153,12 @@ services:
   alert-sink:                                          # Alertmanager webhook receiver: persists every alert to sq.alert_events
     build: ./tools/alert-sink
     container_name: sq-alert-sink
-    ports: ["5001:5001"]
+    ports: ["${SQ_BIND_ADDRESS:-127.0.0.1}:5001:5001"]
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_DB: sq
       POSTGRES_USER: sq_writer
-      POSTGRES_PASSWORD: sq_writer_pw
+      POSTGRES_PASSWORD: ${SQ_WRITER_PASSWORD:?run make up (it generates passwords into cluster.env)}
     depends_on: { postgres: { condition: service_healthy } }
     restart: unless-stopped
     networks: [sq]
@@ -164,10 +166,11 @@ services:
   grafana:
     image: grafana/grafana:13.0.10
     container_name: sq-grafana
-    ports: ["3000:3000"]
+    ports: ["${SQ_BIND_ADDRESS:-127.0.0.1}:3000:3000"]
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run make up (it generates passwords into cluster.env)}
+      SQ_READER_PASSWORD: ${SQ_READER_PASSWORD:?run make up}        # read by the provisioned Postgres datasource
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/topic-health.json
       GF_USERS_DEFAULT_THEME: light                    # the dashboards are designed for the light theme (white cards on lavender)
       # Lets the provisioned header panel carry the stylesheet. Dashboards are provisioned, but anyone who can EDIT a dashboard

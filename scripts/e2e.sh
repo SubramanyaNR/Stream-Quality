@@ -4,6 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -f flink-job/target/stream-quality-job.jar ] || { echo "build the jar first: (cd flink-job && mvn -B package -DskipTests)"; exit 2; }
+# Throwaway credentials for this run only (the stack is deleted at the end).
+gen() { python3 -c 'import secrets; print(secrets.token_hex(12))'; }
+export E2E_ADMIN_PASSWORD=$(gen) SQ_WRITER_PASSWORD=$(gen) SQ_READER_PASSWORD=$(gen)
 C="docker compose -f docker-compose.e2e.yml"
 trap 'status=$?; [ $status -ne 0 ] && $C logs --tail=60 job || true; $C down -v >/dev/null 2>&1; exit $status' EXIT
 $C up -d --build --wait kafka postgres
@@ -11,5 +14,5 @@ for t in e2e.orders e2e.quiet sq.dead-letter; do
   $C exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic "$t" --partitions 1 --replication-factor 1 >/dev/null
 done
 $C up -d job
-export E2E_PG_HOST=127.0.0.1 E2E_PG_PORT=15433 E2E_PG_ADMIN=sq_admin E2E_PG_ADMIN_PASSWORD=admin
+export E2E_PG_HOST=127.0.0.1 E2E_PG_PORT=15433 E2E_PG_ADMIN=sq_admin E2E_PG_ADMIN_PASSWORD=$E2E_ADMIN_PASSWORD
 python3 scripts/e2e_check.py

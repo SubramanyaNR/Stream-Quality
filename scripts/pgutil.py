@@ -10,6 +10,9 @@ PORT = int(os.environ.get("E2E_PG_PORT", "5432"))
 DB = os.environ.get("E2E_PG_DB", "sq")
 ADMIN = os.environ.get("E2E_PG_ADMIN", "postgres")
 ADMIN_PW = os.environ.get("E2E_PG_ADMIN_PASSWORD", "")
+# Test databases only: the role passwords postgres/init/02_role_passwords.sh was run with.
+WRITER_PW = os.environ.get("SQ_WRITER_PASSWORD", "sq_writer_pw")
+READER_PW = os.environ.get("SQ_READER_PASSWORD", "sq_reader_pw")
 JDBC_URL = f"jdbc:postgresql://{HOST}:{PORT}/{DB}"
 
 

@@ -173,10 +173,10 @@ BEGIN
 END $$;
 
 -- ---------- 6. Least-privilege roles: Flink writes only, Grafana reads only ----------
--- (demo passwords; change them before exposing anything)
+-- Passwords are NOT set here: 02_role_passwords.sh sets them from SQ_WRITER_PASSWORD / SQ_READER_PASSWORD (generated into cluster.env).
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sq_writer') THEN CREATE ROLE sq_writer LOGIN PASSWORD 'sq_writer_pw'; END IF;
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sq_reader') THEN CREATE ROLE sq_reader LOGIN PASSWORD 'sq_reader_pw'; END IF;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sq_writer') THEN CREATE ROLE sq_writer LOGIN; END IF;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sq_reader') THEN CREATE ROLE sq_reader LOGIN; END IF;
 END $$;
 GRANT USAGE ON SCHEMA sq TO sq_writer, sq_reader;
 GRANT SELECT, INSERT, UPDATE ON sq.check_results, sq.latest_status, sq.job_heartbeat TO sq_writer;

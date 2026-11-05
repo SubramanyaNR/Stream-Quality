@@ -63,7 +63,7 @@ Topics matching the pattern are picked up within a minute of being created. Topi
 | Grafana (admin/admin) | http://localhost:3000 |
 | Flink UI | cluster profile only: http://localhost:8082 |
 | Prometheus / Alertmanager | http://localhost:9090 / http://localhost:9093 |
-| PostgreSQL | localhost:5432, db `sq` (`sq_reader` / `sq_reader_pw`) |
+| PostgreSQL | localhost:5432, db `sq` (read-only user `sq_reader`, password `SQ_READER_PASSWORD` in `cluster.env`) |
 
 Kafka and Apicurio are **not** deployed by this project. Optional: `make schemas` registers `config/schemas/*.json`
 (artifact `<topic>-value`) in your registry.
@@ -108,8 +108,8 @@ make test-dashboards # runs every Grafana query against Postgres
 ```
 
 ## Security notes
-Demo credentials (`sq_writer_pw`, `admin/admin`) are for local use; change them in `postgres/init/01_init.sql` and `cluster.env`
-before exposing anything. Kafka secrets go in `cluster.env` and are referenced as `${env:NAME}` in `config/kafka.properties`.
+Credentials: `make up` generates a random password for every account (Postgres admin, `sq_writer`, `sq_reader`, Grafana `admin`) into `cluster.env` (git-ignored, `chmod 600`). Published ports listen on `127.0.0.1` only (`SQ_BIND_ADDRESS`). See [SECURITY.md](SECURITY.md).
+Kafka secrets go in `cluster.env` and are referenced as `${env:NAME}` in `config/kafka.properties`.
 
 
 ## Dashboards

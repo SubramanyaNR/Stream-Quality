@@ -92,7 +92,7 @@ public final class StreamQualityJob {
         PostgresConfig pg = PostgresConfig.of(
                 arg(params, "postgres.url", "POSTGRES_URL", "jdbc:postgresql://postgres:5432/sq"),
                 arg(params, "postgres.user", "POSTGRES_USER", "sq_writer"),
-                arg(params, "postgres.password", "POSTGRES_PASSWORD", "sq_writer_pw"));
+                required(params, "postgres.password", "POSTGRES_PASSWORD"));
 
         RegistryConfig registryCfg = RegistryConfig.from(registry);
         String jobId = params.get("job-id", "sq-" + java.util.UUID.randomUUID().toString().substring(0, 8));
@@ -173,6 +173,13 @@ public final class StreamQualityJob {
         heartbeat.union(results).sinkTo(new PostgresSink(pg)).name("postgres").setParallelism(1);
 
                 // Phase 5 (distribution shift, 24h baseline): intentionally skipped
+    }
+
+    private static String required(ParameterTool p, String key, String env) {
+        String v = arg(p, key, env, null);
+        if (v == null || v.isBlank())
+            throw new IllegalArgumentException("--" + key + " / " + env + " is not set (make up generates it into cluster.env)");
+        return v;
     }
 
     private static String arg(ParameterTool p, String key, String env, String def) {

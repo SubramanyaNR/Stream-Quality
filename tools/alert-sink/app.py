@@ -28,7 +28,7 @@ def connect():
     return psycopg2.connect(
         host=os.environ.get("POSTGRES_HOST", "postgres"), port=int(os.environ.get("POSTGRES_PORT", "5432")),
         dbname=os.environ.get("POSTGRES_DB", "sq"), user=os.environ.get("POSTGRES_USER", "sq_writer"),
-        password=os.environ.get("POSTGRES_PASSWORD", "sq_writer_pw"), connect_timeout=3)
+        password=os.environ["POSTGRES_PASSWORD"], connect_timeout=3)
 
 
 def ts(value):

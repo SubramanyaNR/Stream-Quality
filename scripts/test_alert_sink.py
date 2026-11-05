@@ -24,7 +24,7 @@ def check(name, cond, info=""):
 
 def writer_conn():
     import psycopg2
-    return psycopg2.connect(host=pgutil.HOST, port=pgutil.PORT, dbname=pgutil.DB, user="sq_writer", password="sq_writer_pw", connect_timeout=3)
+    return psycopg2.connect(host=pgutil.HOST, port=pgutil.PORT, dbname=pgutil.DB, user="sq_writer", password=pgutil.WRITER_PW, connect_timeout=3)
 
 
 pgutil.execute("TRUNCATE sq.alert_events")
@@ -112,7 +112,7 @@ try:
     c.cursor().execute("UPDATE sq.alert_events SET summary = 'x'"); check("sink role must not UPDATE", False)
 except psycopg2.errors.InsufficientPrivilege:
     pass
-r = psycopg2.connect(host=pgutil.HOST, port=pgutil.PORT, dbname=pgutil.DB, user="sq_reader", password="sq_reader_pw"); r.autocommit = True
+r = psycopg2.connect(host=pgutil.HOST, port=pgutil.PORT, dbname=pgutil.DB, user="sq_reader", password=pgutil.READER_PW); r.autocommit = True
 rc = r.cursor(); rc.execute("SELECT count(*) FROM sq.alert_history"); rc.fetchone()
 check("read-only role can query alert_history", True)
 

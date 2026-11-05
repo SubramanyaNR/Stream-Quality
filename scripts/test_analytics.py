@@ -57,7 +57,7 @@ for st, fp, name, sev, topic, ct, start, end in [
 cur.close()
 
 q = lambda uid, title, ref="A": pgutil.query(dashboard_sql.subst(dashboard_sql.find(uid, title, ref),
-                                             {**dashboard_sql.VARS, "topic": "'a','b'"}), user="sq_reader", password="sq_reader_pw")
+                                             {**dashboard_sql.VARS, "topic": "'a','b'"}), user="sq_reader", password=pgutil.READER_PW)
 AN = "sq-analytics"
 
 # ---------- incidents ----------

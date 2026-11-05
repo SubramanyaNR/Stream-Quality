@@ -17,7 +17,7 @@ for d, queries in dashboard_sql.load():
     print(f"\n{d['title']}  ({d['uid']})")
     for label, _title, _ref, sql, fmt in queries:
         try:
-            rows = pgutil.query(dashboard_sql.subst(sql), user="sq_reader", password="sq_reader_pw")
+            rows = pgutil.query(dashboard_sql.subst(sql), user="sq_reader", password=pgutil.READER_PW)
             if STRICT and not rows and not any(m in sql or m in label for m in MAY_BE_EMPTY):
                 raise RuntimeError("0 rows (strict mode)")
             cols = list(rows[0].keys()) if rows else "(no rows)"

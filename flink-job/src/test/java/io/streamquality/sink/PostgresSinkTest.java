@@ -34,7 +34,7 @@ class PostgresSinkTest {
     }
 
     PostgresSink.Writer writer(int batch, int retries, long flushMs) {
-        return new PostgresSink.Writer(new PostgresConfig(URL, "sq_writer", "sq_writer_pw", batch, retries, flushMs));
+        return new PostgresSink.Writer(new PostgresConfig(URL, "sq_writer", System.getenv().getOrDefault("SQ_WRITER_PASSWORD", "sq_writer_pw"), batch, retries, flushMs));
     }
 
     long count(String sql) throws SQLException {

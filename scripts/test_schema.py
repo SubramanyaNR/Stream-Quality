@@ -5,6 +5,8 @@ import sys
 
 import psycopg2
 
+import pgutil
+
 host, port, admin, db = sys.argv[1:5]
 fails = []
 
@@ -23,8 +25,8 @@ def conn(user, pw=None):
 
 a = conn(admin).cursor()
 a.execute("TRUNCATE sq.check_results, sq.latest_status, sq.job_heartbeat")
-w = conn("sq_writer", "sq_writer_pw").cursor()
-r = conn("sq_reader", "sq_reader_pw").cursor()
+w = conn("sq_writer", pgutil.WRITER_PW).cursor()
+r = conn("sq_reader", pgutil.READER_PW).cursor()
 
 INS = """INSERT INTO sq.check_results (topic, field, check_type, window_start, window_end, value, threshold, status, details)
          VALUES (%s,%s,%s,%s::timestamptz,%s::timestamptz,%s,%s,%s,%s::jsonb)
