@@ -143,5 +143,10 @@ Class names inside Grafana can change between versions: the dashboards were chec
 containers (~1.3 GB). Results use ~230 bytes/row; retention defaults to 30 days. Upgrade an existing database with `make migrate`.
 Tests: `make test`, `make e2e` (see docs/TESTING.md).
 
+## Documentation
+- [Configuration reference](docs/CONFIGURATION.md): every setting, check, metric and dead-letter reason
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Architecture](docs/ARCHITECTURE.md), [Kafka connectivity](docs/KAFKA_CONNECTIVITY.md), [Testing](docs/TESTING.md), [Security](SECURITY.md)
+
 ## License
 Apache License 2.0: see [LICENSE](LICENSE) and [NOTICE](NOTICE). Third-party components keep their own licenses.
